@@ -20,6 +20,8 @@ import NewWorkout from "@/pages/workouts/new";
 import WorkoutDetail from "@/pages/workouts/detail";
 import Billing from "@/pages/billing";
 import NewInvoice from "@/pages/billing/new";
+import Reports from "@/pages/reports";
+import WebGen from "@/pages/webgen";
 import Settings from "@/pages/settings";
 import Scoreboard from "@/pages/scoreboard";
 
@@ -30,15 +32,15 @@ function Router() {
     <Layout>
       <Switch>
         <Route path="/" component={Dashboard} />
-        
+
         <Route path="/meets/new" component={NewMeet} />
         <Route path="/meets/:id/*?" component={MeetDetail} />
         <Route path="/meets" component={Meets} />
-        
+
         <Route path="/athletes/new" component={NewAthlete} />
         <Route path="/athletes/:id" component={AthleteDetail} />
         <Route path="/athletes" component={Athletes} />
-        
+
         <Route path="/teams/new" component={NewTeam} />
         <Route path="/teams/:id" component={TeamDetail} />
         <Route path="/teams" component={Teams} />
@@ -50,10 +52,12 @@ function Router() {
         <Route path="/billing/new" component={NewInvoice} />
         <Route path="/billing" component={Billing} />
 
-        <Route path="/settings" component={Settings} />
+        <Route path="/reports" component={Reports} />
+        <Route path="/webgen" component={WebGen} />
 
+        <Route path="/settings" component={Settings} />
         <Route path="/scoreboard" component={Scoreboard} />
-        
+
         <Route component={NotFound} />
       </Switch>
     </Layout>
