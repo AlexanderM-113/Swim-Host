@@ -21,8 +21,8 @@ const eventSchema = z.object({
   ageGroup: z.string().optional(),
   distance: z.coerce.number().min(25),
   stroke: z.string().min(1),
-  eventType: z.string().optional(),
-  heatOrder: z.string().optional(),
+  eventType: z.string().default("Standard"),
+  heatOrder: z.string().default("Slow-to-Fast"),
   isRelay: z.boolean().default(false),
 });
 
