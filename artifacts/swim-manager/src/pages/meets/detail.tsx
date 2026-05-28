@@ -1,7 +1,7 @@
 import { useRoute, Link, Switch, Route } from "wouter";
 import { useGetMeet, getGetMeetQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, MapPin } from "lucide-react";
 import { format } from "date-fns";
@@ -16,15 +16,17 @@ import MeetTeamScores from "./tabs/team-scores";
 
 export default function MeetDetail() {
   const [match, params] = useRoute("/meets/:id/*?");
-  const meetId = params?.id ? parseInt(params.id, 10) : 0;
-  const currentTab = params?.["*"] || "";
+  const meetId = params?.id ? parseInt(params.id, 10) : undefined;
 
-  const { data: meet, isLoading } = useGetMeet(meetId, { 
-    query: { enabled: !!meetId, queryKey: getGetMeetQueryKey(meetId) } 
+  const { data: meet, isLoading } = useGetMeet(meetId || 0, { 
+    query: { enabled: !!meetId, queryKey: getGetMeetQueryKey(meetId || 0) } 
   });
 
+  if (!meetId || isNaN(meetId)) return <div className="p-8">Invalid meet ID</div>;
   if (isLoading) return <div className="p-8">Loading meet details...</div>;
   if (!meet) return <div className="p-8">Meet not found</div>;
+
+  const currentTab = params?.["*"] || "";
 
   return (
     <div className="space-y-6">
