@@ -1,22 +1,49 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: SwimManager Pro API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: clubs
+    description: Club/organization management
+  - name: athletes
+    description: Athlete management
+  - name: teams
+    description: Team and school management
+  - name: meets
+    description: Swim meet management
+  - name: events
+    description: Meet events
+  - name: entries
+    description: Athlete event entries
+  - name: heats
+    description: Heat seeding and results
+  - name: results
+    description: Race results
+  - name: relays
+    description: Relay entries and orders
+  - name: sessions
+    description: Meet sessions
+  - name: timestandards
+    description: Time standards
+  - name: workouts
+    description: Workout management
+  - name: billing
+    description: Team billing management
+  - name: dashboard
+    description: Dashboard summaries
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +51,1095 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ── CLUB ──────────────────────────────────────────────────────────────────
+  /club:
+    get:
+      operationId: getClub
+      tags: [clubs]
+      summary: Get club info
+      responses:
+        "200":
+          description: Club info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Club"
+    put:
+      operationId: updateClub
+      tags: [clubs]
+      summary: Update club info
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClubInput"
+      responses:
+        "200":
+          description: Updated club
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Club"
+
+  # ── ATHLETES ──────────────────────────────────────────────────────────────
+  /athletes:
+    get:
+      operationId: listAthletes
+      tags: [athletes]
+      summary: List all athletes
+      parameters:
+        - name: teamId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: search
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: gender
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: ageGroup
+          in: query
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: List of athletes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Athlete"
+    post:
+      operationId: createAthlete
+      tags: [athletes]
+      summary: Create a new athlete
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AthleteInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Athlete"
+
+  /athletes/{id}:
+    get:
+      operationId: getAthlete
+      tags: [athletes]
+      summary: Get athlete by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Athlete
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Athlete"
+    patch:
+      operationId: updateAthlete
+      tags: [athletes]
+      summary: Update athlete
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AthleteUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Athlete"
+    delete:
+      operationId: deleteAthlete
+      tags: [athletes]
+      summary: Delete athlete
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── TEAMS ─────────────────────────────────────────────────────────────────
+  /teams:
+    get:
+      operationId: listTeams
+      tags: [teams]
+      summary: List all teams
+      responses:
+        "200":
+          description: List of teams
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Team"
+    post:
+      operationId: createTeam
+      tags: [teams]
+      summary: Create a team
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeamInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+
+  /teams/{id}:
+    get:
+      operationId: getTeam
+      tags: [teams]
+      summary: Get team by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Team
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+    patch:
+      operationId: updateTeam
+      tags: [teams]
+      summary: Update team
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeamUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+    delete:
+      operationId: deleteTeam
+      tags: [teams]
+      summary: Delete team
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── MEETS ─────────────────────────────────────────────────────────────────
+  /meets:
+    get:
+      operationId: listMeets
+      tags: [meets]
+      summary: List all meets
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: List of meets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Meet"
+    post:
+      operationId: createMeet
+      tags: [meets]
+      summary: Create a meet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MeetInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Meet"
+
+  /meets/{id}:
+    get:
+      operationId: getMeet
+      tags: [meets]
+      summary: Get meet by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Meet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Meet"
+    patch:
+      operationId: updateMeet
+      tags: [meets]
+      summary: Update meet
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MeetUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Meet"
+    delete:
+      operationId: deleteMeet
+      tags: [meets]
+      summary: Delete meet
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /meets/{id}/summary:
+    get:
+      operationId: getMeetSummary
+      tags: [meets]
+      summary: Get meet summary stats
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Meet summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeetSummary"
+
+  /meets/{id}/team-scores:
+    get:
+      operationId: getMeetTeamScores
+      tags: [meets]
+      summary: Get team scores for a meet
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Team scores
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TeamScore"
+
+  # ── SESSIONS ──────────────────────────────────────────────────────────────
+  /meets/{meetId}/sessions:
+    get:
+      operationId: listSessions
+      tags: [sessions]
+      summary: List sessions for a meet
+      parameters:
+        - name: meetId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Session"
+    post:
+      operationId: createSession
+      tags: [sessions]
+      summary: Create a session
+      parameters:
+        - name: meetId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SessionInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+
+  /sessions/{id}:
+    patch:
+      operationId: updateSession
+      tags: [sessions]
+      summary: Update session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SessionUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+    delete:
+      operationId: deleteSession
+      tags: [sessions]
+      summary: Delete session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── EVENTS ────────────────────────────────────────────────────────────────
+  /meets/{meetId}/events:
+    get:
+      operationId: listEvents
+      tags: [events]
+      summary: List events for a meet
+      parameters:
+        - name: meetId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Event"
+    post:
+      operationId: createEvent
+      tags: [events]
+      summary: Create an event
+      parameters:
+        - name: meetId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+
+  /events/{id}:
+    get:
+      operationId: getEvent
+      tags: [events]
+      summary: Get event by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+    patch:
+      operationId: updateEvent
+      tags: [events]
+      summary: Update event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+    delete:
+      operationId: deleteEvent
+      tags: [events]
+      summary: Delete event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── ENTRIES ───────────────────────────────────────────────────────────────
+  /events/{eventId}/entries:
+    get:
+      operationId: listEntries
+      tags: [entries]
+      summary: List entries for an event
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Entry"
+    post:
+      operationId: createEntry
+      tags: [entries]
+      summary: Add an entry to an event
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntryInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Entry"
+
+  /entries/{id}:
+    patch:
+      operationId: updateEntry
+      tags: [entries]
+      summary: Update entry (scratch, lane, seed time)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntryUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Entry"
+    delete:
+      operationId: deleteEntry
+      tags: [entries]
+      summary: Delete entry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── HEATS ─────────────────────────────────────────────────────────────────
+  /events/{eventId}/heats:
+    get:
+      operationId: listHeats
+      tags: [heats]
+      summary: List heats for an event
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Heats
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Heat"
+    post:
+      operationId: seedEvent
+      tags: [heats]
+      summary: Seed an event (generate heats)
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SeedInput"
+      responses:
+        "201":
+          description: Seeded
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Heat"
+
+  # ── RESULTS ───────────────────────────────────────────────────────────────
+  /entries/{entryId}/result:
+    get:
+      operationId: getResult
+      tags: [results]
+      summary: Get result for an entry
+      parameters:
+        - name: entryId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+    put:
+      operationId: setResult
+      tags: [results]
+      summary: Set or update result for an entry
+      parameters:
+        - name: entryId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResultInput"
+      responses:
+        "200":
+          description: Result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+
+  /events/{eventId}/results:
+    get:
+      operationId: listEventResults
+      tags: [results]
+      summary: Get all results for an event sorted by place
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Result"
+
+  # ── RELAYS ────────────────────────────────────────────────────────────────
+  /events/{eventId}/relays:
+    get:
+      operationId: listRelays
+      tags: [relays]
+      summary: List relay entries for an event
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Relay entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RelayEntry"
+    post:
+      operationId: createRelay
+      tags: [relays]
+      summary: Create relay entry
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RelayEntryInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RelayEntry"
+
+  /relays/{id}:
+    patch:
+      operationId: updateRelay
+      tags: [relays]
+      summary: Update relay entry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RelayEntryUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RelayEntry"
+    delete:
+      operationId: deleteRelay
+      tags: [relays]
+      summary: Delete relay entry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── TIME STANDARDS ────────────────────────────────────────────────────────
+  /timestandards:
+    get:
+      operationId: listTimeStandards
+      tags: [timestandards]
+      summary: List time standard sets
+      responses:
+        "200":
+          description: Time standards
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TimeStandardSet"
+    post:
+      operationId: createTimeStandardSet
+      tags: [timestandards]
+      summary: Create a time standard set
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimeStandardSetInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeStandardSet"
+
+  /timestandards/{id}:
+    delete:
+      operationId: deleteTimeStandardSet
+      tags: [timestandards]
+      summary: Delete time standard set
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── WORKOUTS ──────────────────────────────────────────────────────────────
+  /workouts:
+    get:
+      operationId: listWorkouts
+      tags: [workouts]
+      summary: List all workouts
+      parameters:
+        - name: teamId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: search
+          in: query
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: Workouts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Workout"
+    post:
+      operationId: createWorkout
+      tags: [workouts]
+      summary: Create a workout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkoutInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workout"
+
+  /workouts/{id}:
+    get:
+      operationId: getWorkout
+      tags: [workouts]
+      summary: Get workout by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Workout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workout"
+    patch:
+      operationId: updateWorkout
+      tags: [workouts]
+      summary: Update workout
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkoutUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workout"
+    delete:
+      operationId: deleteWorkout
+      tags: [workouts]
+      summary: Delete workout
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── BILLING ───────────────────────────────────────────────────────────────
+  /billing/invoices:
+    get:
+      operationId: listInvoices
+      tags: [billing]
+      summary: List invoices
+      parameters:
+        - name: athleteId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: status
+          in: query
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: Invoices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Invoice"
+    post:
+      operationId: createInvoice
+      tags: [billing]
+      summary: Create an invoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoiceInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+
+  /billing/invoices/{id}:
+    get:
+      operationId: getInvoice
+      tags: [billing]
+      summary: Get invoice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+    patch:
+      operationId: updateInvoice
+      tags: [billing]
+      summary: Update invoice status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoiceUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+
+  /billing/summary:
+    get:
+      operationId: getBillingSummary
+      tags: [billing]
+      summary: Get billing summary totals
+      responses:
+        "200":
+          description: Billing summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingSummary"
+
+  # ── DASHBOARD ─────────────────────────────────────────────────────────────
+  /dashboard/stats:
+    get:
+      operationId: getDashboardStats
+      tags: [dashboard]
+      summary: Get overall system dashboard stats
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /dashboard/recent-activity:
+    get:
+      operationId: getRecentActivity
+      tags: [dashboard]
+      summary: Get recent system activity
+      responses:
+        "200":
+          description: Recent activity
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityItem"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +1150,1124 @@ components:
       required:
         - status
 
+    # ── CLUB ──────────────────────────────────────────────────────────────
+    Club:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        abbreviation:
+          type: ["string", "null"]
+        lsc:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        city:
+          type: ["string", "null"]
+        state:
+          type: ["string", "null"]
+        country:
+          type: ["string", "null"]
+        postalCode:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        website:
+          type: ["string", "null"]
+        logoUrl:
+          type: ["string", "null"]
+
+    ClubInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        abbreviation:
+          type: string
+        lsc:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        country:
+          type: string
+        postalCode:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        website:
+          type: string
+        logoUrl:
+          type: string
+
+    # ── ATHLETE ───────────────────────────────────────────────────────────
+    Athlete:
+      type: object
+      required: [id, firstName, lastName, gender, teamId]
+      properties:
+        id:
+          type: integer
+        firstName:
+          type: string
+        lastName:
+          type: string
+        gender:
+          type: string
+        dateOfBirth:
+          type: ["string", "null"]
+        age:
+          type: ["integer", "null"]
+        teamId:
+          type: integer
+        teamName:
+          type: ["string", "null"]
+        idNumber:
+          type: ["string", "null"]
+        idFormat:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        parentName:
+          type: ["string", "null"]
+        parentPhone:
+          type: ["string", "null"]
+        parentEmail:
+          type: ["string", "null"]
+        healthNotes:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        active:
+          type: boolean
+        createdAt:
+          type: string
+
+    AthleteInput:
+      type: object
+      required: [firstName, lastName, gender, teamId]
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        gender:
+          type: string
+        dateOfBirth:
+          type: string
+        teamId:
+          type: integer
+        idNumber:
+          type: string
+        idFormat:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        parentName:
+          type: string
+        parentPhone:
+          type: string
+        parentEmail:
+          type: string
+        healthNotes:
+          type: string
+        notes:
+          type: string
+
+    AthleteUpdate:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        gender:
+          type: string
+        dateOfBirth:
+          type: string
+        teamId:
+          type: integer
+        idNumber:
+          type: string
+        idFormat:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        parentName:
+          type: string
+        parentPhone:
+          type: string
+        parentEmail:
+          type: string
+        healthNotes:
+          type: string
+        notes:
+          type: string
+        active:
+          type: boolean
+
+    # ── TEAM ──────────────────────────────────────────────────────────────
+    Team:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        abbreviation:
+          type: ["string", "null"]
+        shortName:
+          type: ["string", "null"]
+        lsc:
+          type: ["string", "null"]
+        coachName:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        city:
+          type: ["string", "null"]
+        state:
+          type: ["string", "null"]
+        country:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        athleteCount:
+          type: ["integer", "null"]
+
+    TeamInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        abbreviation:
+          type: string
+        shortName:
+          type: string
+        lsc:
+          type: string
+        coachName:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        country:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+
+    TeamUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        abbreviation:
+          type: string
+        shortName:
+          type: string
+        lsc:
+          type: string
+        coachName:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        country:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+
+    # ── MEET ──────────────────────────────────────────────────────────────
+    Meet:
+      type: object
+      required: [id, name, startDate]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        startDate:
+          type: string
+        endDate:
+          type: ["string", "null"]
+        facility:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        city:
+          type: ["string", "null"]
+        state:
+          type: ["string", "null"]
+        country:
+          type: ["string", "null"]
+        postalCode:
+          type: ["string", "null"]
+        course:
+          type: string
+        meetType:
+          type: string
+        meetStyle:
+          type: string
+        meetClass:
+          type: ["string", "null"]
+        idFormat:
+          type: ["string", "null"]
+        hostLsc:
+          type: ["string", "null"]
+        altitude:
+          type: ["integer", "null"]
+        entryDeadline:
+          type: ["string", "null"]
+        ageUpDate:
+          type: ["string", "null"]
+        status:
+          type: string
+        scoringRules:
+          type: ["string", "null"]
+        lanes:
+          type: integer
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    MeetInput:
+      type: object
+      required: [name, startDate, course, meetType, meetStyle]
+      properties:
+        name:
+          type: string
+        startDate:
+          type: string
+        endDate:
+          type: string
+        facility:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        country:
+          type: string
+        postalCode:
+          type: string
+        course:
+          type: string
+        meetType:
+          type: string
+        meetStyle:
+          type: string
+        meetClass:
+          type: string
+        idFormat:
+          type: string
+        hostLsc:
+          type: string
+        altitude:
+          type: integer
+        entryDeadline:
+          type: string
+        ageUpDate:
+          type: string
+        scoringRules:
+          type: string
+        lanes:
+          type: integer
+        notes:
+          type: string
+
+    MeetUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        startDate:
+          type: string
+        endDate:
+          type: string
+        facility:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        country:
+          type: string
+        postalCode:
+          type: string
+        course:
+          type: string
+        meetType:
+          type: string
+        meetStyle:
+          type: string
+        meetClass:
+          type: string
+        idFormat:
+          type: string
+        hostLsc:
+          type: string
+        altitude:
+          type: integer
+        entryDeadline:
+          type: string
+        ageUpDate:
+          type: string
+        status:
+          type: string
+        scoringRules:
+          type: string
+        lanes:
+          type: integer
+        notes:
+          type: string
+
+    MeetSummary:
+      type: object
+      required: [meetId, totalAthletes, totalEvents, totalEntries, totalTeams, completedEvents, pendingEvents]
+      properties:
+        meetId:
+          type: integer
+        totalAthletes:
+          type: integer
+        totalEvents:
+          type: integer
+        totalEntries:
+          type: integer
+        totalTeams:
+          type: integer
+        completedEvents:
+          type: integer
+        pendingEvents:
+          type: integer
+        totalHeats:
+          type: integer
+
+    TeamScore:
+      type: object
+      required: [teamId, teamName, points, place]
+      properties:
+        teamId:
+          type: integer
+        teamName:
+          type: string
+        teamAbbreviation:
+          type: ["string", "null"]
+        points:
+          type: number
+        place:
+          type: integer
+
+    # ── SESSION ───────────────────────────────────────────────────────────
+    Session:
+      type: object
+      required: [id, meetId, name, sessionNumber]
+      properties:
+        id:
+          type: integer
+        meetId:
+          type: integer
+        name:
+          type: string
+        sessionNumber:
+          type: integer
+        date:
+          type: ["string", "null"]
+        startTime:
+          type: ["string", "null"]
+        sessionType:
+          type: string
+        warmupTime:
+          type: ["string", "null"]
+
+    SessionInput:
+      type: object
+      required: [name, sessionNumber, sessionType]
+      properties:
+        name:
+          type: string
+        sessionNumber:
+          type: integer
+        date:
+          type: string
+        startTime:
+          type: string
+        sessionType:
+          type: string
+        warmupTime:
+          type: string
+
+    SessionUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        sessionNumber:
+          type: integer
+        date:
+          type: string
+        startTime:
+          type: string
+        sessionType:
+          type: string
+        warmupTime:
+          type: string
+
+    # ── EVENT ─────────────────────────────────────────────────────────────
+    Event:
+      type: object
+      required: [id, meetId, eventNumber, gender, distance, stroke]
+      properties:
+        id:
+          type: integer
+        meetId:
+          type: integer
+        sessionId:
+          type: ["integer", "null"]
+        eventNumber:
+          type: integer
+        gender:
+          type: string
+        ageGroup:
+          type: ["string", "null"]
+        distance:
+          type: integer
+        stroke:
+          type: string
+        eventType:
+          type: string
+        heatOrder:
+          type: string
+        isRelay:
+          type: boolean
+        entryCount:
+          type: ["integer", "null"]
+        heatCount:
+          type: ["integer", "null"]
+        status:
+          type: string
+
+    EventInput:
+      type: object
+      required: [eventNumber, gender, distance, stroke]
+      properties:
+        sessionId:
+          type: integer
+        eventNumber:
+          type: integer
+        gender:
+          type: string
+        ageGroup:
+          type: string
+        distance:
+          type: integer
+        stroke:
+          type: string
+        eventType:
+          type: string
+        heatOrder:
+          type: string
+        isRelay:
+          type: boolean
+
+    EventUpdate:
+      type: object
+      properties:
+        sessionId:
+          type: integer
+        eventNumber:
+          type: integer
+        gender:
+          type: string
+        ageGroup:
+          type: string
+        distance:
+          type: integer
+        stroke:
+          type: string
+        eventType:
+          type: string
+        heatOrder:
+          type: string
+        status:
+          type: string
+
+    # ── ENTRY ─────────────────────────────────────────────────────────────
+    Entry:
+      type: object
+      required: [id, eventId, athleteId]
+      properties:
+        id:
+          type: integer
+        eventId:
+          type: integer
+        athleteId:
+          type: integer
+        athleteName:
+          type: ["string", "null"]
+        teamId:
+          type: ["integer", "null"]
+        teamName:
+          type: ["string", "null"]
+        seedTime:
+          type: ["number", "null"]
+        seedCourse:
+          type: ["string", "null"]
+        heatNumber:
+          type: ["integer", "null"]
+        lane:
+          type: ["integer", "null"]
+        scratched:
+          type: boolean
+        scratchedReason:
+          type: ["string", "null"]
+
+    EntryInput:
+      type: object
+      required: [athleteId]
+      properties:
+        athleteId:
+          type: integer
+        teamId:
+          type: integer
+        seedTime:
+          type: number
+        seedCourse:
+          type: string
+
+    EntryUpdate:
+      type: object
+      properties:
+        seedTime:
+          type: number
+        seedCourse:
+          type: string
+        heatNumber:
+          type: integer
+        lane:
+          type: integer
+        scratched:
+          type: boolean
+        scratchedReason:
+          type: string
+
+    # ── HEAT ──────────────────────────────────────────────────────────────
+    Heat:
+      type: object
+      required: [id, eventId, heatNumber]
+      properties:
+        id:
+          type: integer
+        eventId:
+          type: integer
+        heatNumber:
+          type: integer
+        status:
+          type: string
+        lanes:
+          type: array
+          items:
+            $ref: "#/components/schemas/HeatLane"
+
+    HeatLane:
+      type: object
+      required: [lane]
+      properties:
+        lane:
+          type: integer
+        entryId:
+          type: ["integer", "null"]
+        athleteId:
+          type: ["integer", "null"]
+        athleteName:
+          type: ["string", "null"]
+        teamName:
+          type: ["string", "null"]
+        seedTime:
+          type: ["number", "null"]
+        finishTime:
+          type: ["number", "null"]
+        place:
+          type: ["integer", "null"]
+        dq:
+          type: boolean
+        ns:
+          type: boolean
+        dnf:
+          type: boolean
+
+    SeedInput:
+      type: object
+      required: [lanes, heatOrder]
+      properties:
+        lanes:
+          type: integer
+        heatOrder:
+          type: string
+        circleSeeding:
+          type: boolean
+
+    # ── RESULT ────────────────────────────────────────────────────────────
+    Result:
+      type: object
+      required: [id, entryId, eventId]
+      properties:
+        id:
+          type: integer
+        entryId:
+          type: integer
+        eventId:
+          type: integer
+        athleteId:
+          type: ["integer", "null"]
+        athleteName:
+          type: ["string", "null"]
+        teamName:
+          type: ["string", "null"]
+        finishTime:
+          type: ["number", "null"]
+        place:
+          type: ["integer", "null"]
+        points:
+          type: ["number", "null"]
+        dq:
+          type: boolean
+        dqCode:
+          type: ["string", "null"]
+        ns:
+          type: boolean
+        dnf:
+          type: boolean
+        splits:
+          type: ["string", "null"]
+        heatNumber:
+          type: ["integer", "null"]
+        lane:
+          type: ["integer", "null"]
+
+    ResultInput:
+      type: object
+      properties:
+        finishTime:
+          type: number
+        dq:
+          type: boolean
+        dqCode:
+          type: string
+        ns:
+          type: boolean
+        dnf:
+          type: boolean
+        splits:
+          type: string
+        place:
+          type: integer
+        points:
+          type: number
+
+    # ── RELAY ─────────────────────────────────────────────────────────────
+    RelayEntry:
+      type: object
+      required: [id, eventId, teamId]
+      properties:
+        id:
+          type: integer
+        eventId:
+          type: integer
+        teamId:
+          type: integer
+        teamName:
+          type: ["string", "null"]
+        seedTime:
+          type: ["number", "null"]
+        heatNumber:
+          type: ["integer", "null"]
+        lane:
+          type: ["integer", "null"]
+        scratched:
+          type: boolean
+        leg1AthleteId:
+          type: ["integer", "null"]
+        leg1AthleteName:
+          type: ["string", "null"]
+        leg2AthleteId:
+          type: ["integer", "null"]
+        leg2AthleteName:
+          type: ["string", "null"]
+        leg3AthleteId:
+          type: ["integer", "null"]
+        leg3AthleteName:
+          type: ["string", "null"]
+        leg4AthleteId:
+          type: ["integer", "null"]
+        leg4AthleteName:
+          type: ["string", "null"]
+        finishTime:
+          type: ["number", "null"]
+        place:
+          type: ["integer", "null"]
+
+    RelayEntryInput:
+      type: object
+      required: [teamId]
+      properties:
+        teamId:
+          type: integer
+        seedTime:
+          type: number
+        leg1AthleteId:
+          type: integer
+        leg2AthleteId:
+          type: integer
+        leg3AthleteId:
+          type: integer
+        leg4AthleteId:
+          type: integer
+
+    RelayEntryUpdate:
+      type: object
+      properties:
+        seedTime:
+          type: number
+        heatNumber:
+          type: integer
+        lane:
+          type: integer
+        scratched:
+          type: boolean
+        leg1AthleteId:
+          type: integer
+        leg2AthleteId:
+          type: integer
+        leg3AthleteId:
+          type: integer
+        leg4AthleteId:
+          type: integer
+        finishTime:
+          type: number
+        place:
+          type: integer
+
+    # ── TIME STANDARDS ────────────────────────────────────────────────────
+    TimeStandardSet:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        course:
+          type: ["string", "null"]
+        gender:
+          type: ["string", "null"]
+        ageGroup:
+          type: ["string", "null"]
+        standards:
+          type: array
+          items:
+            $ref: "#/components/schemas/TimeStandard"
+
+    TimeStandard:
+      type: object
+      required: [id, setId, label, distance, stroke, time]
+      properties:
+        id:
+          type: integer
+        setId:
+          type: integer
+        label:
+          type: string
+        distance:
+          type: integer
+        stroke:
+          type: string
+        gender:
+          type: ["string", "null"]
+        ageGroup:
+          type: ["string", "null"]
+        time:
+          type: number
+
+    TimeStandardSetInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        course:
+          type: string
+        gender:
+          type: string
+        ageGroup:
+          type: string
+
+    # ── WORKOUT ───────────────────────────────────────────────────────────
+    Workout:
+      type: object
+      required: [id, title]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        teamId:
+          type: ["integer", "null"]
+        teamName:
+          type: ["string", "null"]
+        date:
+          type: ["string", "null"]
+        startTime:
+          type: ["string", "null"]
+        endTime:
+          type: ["string", "null"]
+        totalDistance:
+          type: ["integer", "null"]
+        course:
+          type: ["string", "null"]
+        isSample:
+          type: boolean
+        sets:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkoutSet"
+        createdAt:
+          type: string
+
+    WorkoutSet:
+      type: object
+      required: [id, workoutId, setOrder, description]
+      properties:
+        id:
+          type: integer
+        workoutId:
+          type: integer
+        setOrder:
+          type: integer
+        repetitions:
+          type: ["integer", "null"]
+        distance:
+          type: ["integer", "null"]
+        stroke:
+          type: ["string", "null"]
+        restInterval:
+          type: ["string", "null"]
+        description:
+          type: string
+        intensity:
+          type: ["string", "null"]
+
+    WorkoutInput:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        teamId:
+          type: integer
+        date:
+          type: string
+        startTime:
+          type: string
+        endTime:
+          type: string
+        totalDistance:
+          type: integer
+        course:
+          type: string
+        isSample:
+          type: boolean
+        sets:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkoutSetInput"
+
+    WorkoutSetInput:
+      type: object
+      required: [setOrder, description]
+      properties:
+        setOrder:
+          type: integer
+        repetitions:
+          type: integer
+        distance:
+          type: integer
+        stroke:
+          type: string
+        restInterval:
+          type: string
+        description:
+          type: string
+        intensity:
+          type: string
+
+    WorkoutUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        teamId:
+          type: integer
+        date:
+          type: string
+        startTime:
+          type: string
+        endTime:
+          type: string
+        totalDistance:
+          type: integer
+        course:
+          type: string
+        isSample:
+          type: boolean
+
+    # ── BILLING ───────────────────────────────────────────────────────────
+    Invoice:
+      type: object
+      required: [id, athleteId, amount, status]
+      properties:
+        id:
+          type: integer
+        athleteId:
+          type: integer
+        athleteName:
+          type: ["string", "null"]
+        teamId:
+          type: ["integer", "null"]
+        amount:
+          type: number
+        status:
+          type: string
+        dueDate:
+          type: ["string", "null"]
+        paidDate:
+          type: ["string", "null"]
+        description:
+          type: string
+        invoiceType:
+          type: string
+        createdAt:
+          type: string
+
+    InvoiceInput:
+      type: object
+      required: [athleteId, amount, description, invoiceType]
+      properties:
+        athleteId:
+          type: integer
+        teamId:
+          type: integer
+        amount:
+          type: number
+        description:
+          type: string
+        invoiceType:
+          type: string
+        dueDate:
+          type: string
+
+    InvoiceUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+        paidDate:
+          type: string
+        amount:
+          type: number
+        description:
+          type: string
+        dueDate:
+          type: string
+
+    BillingSummary:
+      type: object
+      required: [totalOutstanding, totalPaid, totalOverdue, invoiceCount]
+      properties:
+        totalOutstanding:
+          type: number
+        totalPaid:
+          type: number
+        totalOverdue:
+          type: number
+        invoiceCount:
+          type: integer
+        overdueCount:
+          type: integer
+
+    # ── DASHBOARD ─────────────────────────────────────────────────────────
+    DashboardStats:
+      type: object
+      required: [totalAthletes, totalTeams, totalMeets, activeMeets, upcomingMeets, totalWorkouts]
+      properties:
+        totalAthletes:
+          type: integer
+        totalTeams:
+          type: integer
+        totalMeets:
+          type: integer
+        activeMeets:
+          type: integer
+        upcomingMeets:
+          type: integer
+        totalWorkouts:
+          type: integer
+        outstandingBilling:
+          type: number
+
+    ActivityItem:
+      type: object
+      required: [id, type, description, timestamp]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        description:
+          type: string
+        timestamp:
+          type: string
+        entityId:
+          type: ["integer", "null"]
+        entityName:
+          type: ["string", "null"]
