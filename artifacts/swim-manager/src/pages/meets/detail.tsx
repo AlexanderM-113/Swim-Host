@@ -1,7 +1,7 @@
 import { useRoute, Link, Switch, Route } from "wouter";
 import { useGetMeet, getGetMeetQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, MapPin } from "lucide-react";
 import { format } from "date-fns";
