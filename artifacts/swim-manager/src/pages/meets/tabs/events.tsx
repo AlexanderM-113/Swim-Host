@@ -67,8 +67,10 @@ export default function MeetEvents({ meetId }: { meetId: number }) {
           });
           queryClient.invalidateQueries({ queryKey: getListEventsQueryKey(meetId) });
         },
-        onError: () => {
-          toast({ title: "Failed to create event", variant: "destructive" });
+        onError: (error: any) => {
+          const errorMessage = error?.response?.data?.error || error?.message || "Failed to create event";
+          console.error("Event creation error:", error);
+          toast({ title: "Failed to create event", description: errorMessage, variant: "destructive" });
         }
       }
     );
