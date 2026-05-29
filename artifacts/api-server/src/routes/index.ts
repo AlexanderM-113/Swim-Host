@@ -15,6 +15,7 @@ import workoutsRouter from "./workouts";
 import billingRouter from "./billing";
 import dashboardRouter from "./dashboard";
 import reportsRouter from "./reports";
+import sdifRouter from "./sdif";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use(workoutsRouter);
 router.use(billingRouter);
 router.use(dashboardRouter);
 router.use(reportsRouter);
+router.use(sdifRouter);
 
 export default router;
