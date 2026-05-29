@@ -272,7 +272,7 @@ export function writeSettings(settings: AppSettings): void {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 }
 
-function nextId(items: { id: number }[]): number {
+export function nextId(items: { id: number }[]): number {
   if (!items || items.length === 0) return 1;
   return Math.max(...items.map((i) => i.id)) + 1;
 }

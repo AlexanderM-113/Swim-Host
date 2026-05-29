@@ -1,5 +1,15 @@
 import { useListMeets } from "@/lib/local-store";
-import { format } from "date-fns";
+import { format, parseISO, isValid } from "date-fns";
+
+function safeDate(str?: string | null): string {
+  if (!str) return "TBD";
+  try {
+    const d = parseISO(str);
+    return isValid(d) ? format(d, "MMM d, yyyy") : str;
+  } catch {
+    return str;
+  }
+}
 import { Link } from "wouter";
 import { Plus, Search, Calendar, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -63,8 +73,8 @@ export default function Meets() {
                 <TableCell>
                   <div className="flex items-center text-sm text-muted-foreground">
                     <Calendar className="mr-2 h-3 w-3" />
-                    {format(new Date(meet.startDate), "MMM d, yyyy")}
-                    {meet.endDate && ` - ${format(new Date(meet.endDate), "MMM d, yyyy")}`}
+                    {safeDate(meet.startDate)}
+                    {meet.endDate && ` - ${safeDate(meet.endDate)}`}
                   </div>
                 </TableCell>
                 <TableCell>

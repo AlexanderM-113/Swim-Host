@@ -1,7 +1,9 @@
+import { useEffect } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { startAutoBackup } from "@/lib/backup-service";
 import { Layout } from "@/components/layout";
 import NotFound from "@/pages/not-found";
 
@@ -74,6 +76,10 @@ function Router() {
 }
 
 function App() {
+  useEffect(() => {
+    startAutoBackup();
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
