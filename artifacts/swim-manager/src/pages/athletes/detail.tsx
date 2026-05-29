@@ -1,5 +1,5 @@
 import { useRoute } from "wouter";
-import { useGetAthlete, getGetAthleteQueryKey } from "@workspace/api-client-react";
+import { useGetAthlete, getGetAthleteQueryKey } from "@/lib/local-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { User, Phone, Mail, MapPin } from "lucide-react";
 

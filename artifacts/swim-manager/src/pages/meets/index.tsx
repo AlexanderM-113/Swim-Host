@@ -1,4 +1,4 @@
-import { useListMeets } from "@workspace/api-client-react";
+import { useListMeets } from "@/lib/local-store";
 import { format } from "date-fns";
 import { Link } from "wouter";
 import { Plus, Search, Calendar, MapPin } from "lucide-react";

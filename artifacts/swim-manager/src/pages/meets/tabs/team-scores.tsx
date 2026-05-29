@@ -1,4 +1,4 @@
-import { useGetMeetTeamScores, getGetMeetTeamScoresQueryKey } from "@workspace/api-client-react";
+import { useGetMeetTeamScores, getGetMeetTeamScoresQueryKey } from "@/lib/local-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 

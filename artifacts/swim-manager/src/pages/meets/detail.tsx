@@ -1,5 +1,5 @@
 import { useRoute, Link, Switch, Route } from "wouter";
-import { useGetMeet, getGetMeetQueryKey } from "@workspace/api-client-react";
+import { useGetMeet, getGetMeetQueryKey } from "@/lib/local-store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";

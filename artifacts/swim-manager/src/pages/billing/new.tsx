@@ -2,7 +2,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useLocation } from "wouter";
-import { useCreateInvoice, useListAthletes } from "@workspace/api-client-react";
+import { useCreateInvoice, useListAthletes } from "@/lib/local-store";
 import { Button } from "@/components/ui/button";
 import {
   Form,

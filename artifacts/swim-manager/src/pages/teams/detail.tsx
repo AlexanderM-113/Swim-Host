@@ -1,5 +1,5 @@
 import { useRoute } from "wouter";
-import { useGetTeam, getGetTeamQueryKey } from "@workspace/api-client-react";
+import { useGetTeam, getGetTeamQueryKey } from "@/lib/local-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MapPin, Phone, Mail, User } from "lucide-react";
 

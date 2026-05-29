@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Maximize2, Minimize2, Clock, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
-import { useListMeets, useListEvents, useListHeats } from "@workspace/api-client-react";
+import { useListMeets, useListEvents, useListHeats } from "@/lib/local-store";
 import { formatTime } from "@/lib/format-time";
 
 const PLACE_MEDAL: Record<number, string> = {

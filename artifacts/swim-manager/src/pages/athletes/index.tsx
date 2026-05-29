@@ -1,4 +1,4 @@
-import { useListAthletes, useListTeams } from "@workspace/api-client-react";
+import { useListAthletes, useListTeams } from "@/lib/local-store";
 import { Link } from "wouter";
 import { Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";

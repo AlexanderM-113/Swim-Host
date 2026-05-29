@@ -1,4 +1,4 @@
-import { useListInvoices, useGetBillingSummary } from "@workspace/api-client-react";
+import { useListInvoices, useGetBillingSummary } from "@/lib/local-store";
 import { Link } from "wouter";
 import { Plus, Search, ReceiptText } from "lucide-react";
 import { Button } from "@/components/ui/button";

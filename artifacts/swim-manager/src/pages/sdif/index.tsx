@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { useListMeets, useListEvents, useListAthletes, useListTeams } from "@workspace/api-client-react";
+import { useListMeets, useListEvents, useListAthletes, useListTeams } from "@/lib/local-store";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";

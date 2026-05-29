@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useListEvents, useSeedEvent, getListEventsQueryKey } from "@workspace/api-client-react";
+import { useListEvents, useSeedEvent, getListEventsQueryKey } from "@/lib/local-store";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";

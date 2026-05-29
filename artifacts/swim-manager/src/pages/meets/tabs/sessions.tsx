@@ -1,4 +1,4 @@
-import { useListSessions, getListSessionsQueryKey } from "@workspace/api-client-react";
+import { useListSessions, getListSessionsQueryKey } from "@/lib/local-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { format } from "date-fns";

@@ -3,7 +3,7 @@ import {
   useListEvents, useListEntries, useListAthletes, useListTeams,
   useCreateEntry, useUpdateEntry, useDeleteEntry,
   getListEntriesQueryKey,
-} from "@workspace/api-client-react";
+} from "@/lib/local-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";

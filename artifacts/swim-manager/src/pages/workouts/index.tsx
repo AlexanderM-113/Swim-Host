@@ -1,4 +1,4 @@
-import { useListWorkouts } from "@workspace/api-client-react";
+import { useListWorkouts } from "@/lib/local-store";
 import { Link } from "wouter";
 import { Plus, Search, Calendar, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";

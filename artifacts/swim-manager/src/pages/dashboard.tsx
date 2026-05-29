@@ -1,4 +1,4 @@
-import { useGetDashboardStats, useGetRecentActivity } from "@workspace/api-client-react";
+import { useGetDashboardStats, useGetRecentActivity } from "@/lib/local-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Trophy, Users, MapPin, Calculator, Activity } from "lucide-react";
 import { format } from "date-fns";
