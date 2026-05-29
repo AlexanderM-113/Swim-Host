@@ -70,7 +70,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-8">
-              {activity?.map((item) => (
+              {(Array.isArray(activity) ? activity : []).map((item) => (
                 <div key={item.id} className="flex items-center">
                   <div className="space-y-1">
                     <p className="text-sm font-medium leading-none">{item.description}</p>
