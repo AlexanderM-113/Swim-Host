@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import {
   Activity, Users, MapPin, Calculator, Settings, ReceiptText, Trophy,
-  FileText, Globe, Monitor,
+  FileText, Globe, Monitor, ArrowLeftRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +16,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { name: "Workouts", href: "/workouts", icon: Calculator },
     { name: "Billing", href: "/billing", icon: ReceiptText },
     { name: "Reports", href: "/reports", icon: FileText },
+    { name: "SDIF / Import-Export", href: "/sdif", icon: ArrowLeftRight },
     { name: "Web Generator", href: "/webgen", icon: Globe },
     { name: "Scoreboard", href: "/scoreboard", icon: Monitor },
     { name: "Settings", href: "/settings", icon: Settings },

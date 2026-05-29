@@ -24,8 +24,16 @@ import Reports from "@/pages/reports";
 import WebGen from "@/pages/webgen";
 import Settings from "@/pages/settings";
 import Scoreboard from "@/pages/scoreboard";
+import SDIFPage from "@/pages/sdif";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      staleTime: 30_000,
+    },
+  },
+});
 
 function Router() {
   return (
@@ -53,6 +61,7 @@ function Router() {
         <Route path="/billing" component={Billing} />
 
         <Route path="/reports" component={Reports} />
+        <Route path="/sdif" component={SDIFPage} />
         <Route path="/webgen" component={WebGen} />
 
         <Route path="/settings" component={Settings} />
