@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
-import { useListMeets, useListEvents, useListAthletes, useListTeams } from "@/lib/local-store";
+import { useListMeets, readStore, writeStore, nextId } from "@/lib/local-store";
+import type { Meet, Team, Athlete, Event, Entry } from "@/lib/local-store";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import {
   parseSDIF, generateSDIF, summarizeSDIF, buildSDIFExportData,
-  type SDIFImportSummary, STROKE_CODE_TO_NAME, COURSE_CODE_TO_NAME,
+  type SDIFImportSummary, type SDIFFile, STROKE_CODE_TO_NAME, COURSE_CODE_TO_NAME,
 } from "@/lib/sdif";
 import { formatTime } from "@/lib/format-time";
 import {
@@ -20,22 +21,161 @@ import {
   Users, Calendar, Trophy
 } from "lucide-react";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+// ─── SDIF date parsing (MMDDYYYY → YYYY-MM-DD) ───────────────────────────────
 
-async function apiFetch(path: string) {
-  const r = await fetch(`${BASE}/api${path}`);
-  if (!r.ok) throw new Error(`API ${r.status}: ${await r.text()}`);
-  return r.json();
+function parseSdifDate(d?: string): string | undefined {
+  if (!d || d.length < 8) return undefined;
+  const mo = d.substring(0, 2), day = d.substring(2, 4), yr = d.substring(4, 8);
+  if (!yr || yr === "0000") return undefined;
+  return `${yr}-${mo}-${day}`;
 }
 
-async function apiPost(path: string, body: unknown) {
-  const r = await fetch(`${BASE}/api${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+const SDIF_STROKE_MAP: Record<number, string> = {
+  1: "Freestyle", 2: "Backstroke", 3: "Breaststroke", 4: "Butterfly",
+  5: "Individual Medley", 6: "Freestyle Relay", 7: "Medley Relay",
+};
+
+// ─── Local SDIF import ────────────────────────────────────────────────────────
+
+function importSDIFLocally(sdif: SDIFFile): {
+  meetId: number; teams: number; entries: number;
+} {
+  const store = readStore();
+  const courseMap: Record<string, string> = { Y: "SCY", S: "SCM", L: "LCM" };
+
+  const meet: Meet = {
+    id: nextId(store.meets),
+    name: sdif.meet?.name ?? "Imported Meet",
+    startDate: parseSdifDate(sdif.meet?.startDate) ?? new Date().toISOString().split("T")[0],
+    endDate: parseSdifDate(sdif.meet?.endDate),
+    facility: sdif.meet?.facility,
+    course: courseMap[sdif.meet?.course ?? "Y"] ?? "SCY",
+    altitude: sdif.meet?.altitude,
+    meetType: "open",
+    status: "scheduled",
+    lanes: 8,
+    createdAt: new Date().toISOString(),
+  };
+
+  const newTeams: Team[] = [];
+  const teamIdMap = new Map<string, number>();
+  for (const sdifTeam of sdif.teams) {
+    const existing = store.teams.find(
+      (t) => t.abbreviation === sdifTeam.code || t.name === sdifTeam.name
+    );
+    if (existing) {
+      teamIdMap.set(sdifTeam.code, existing.id);
+    } else {
+      const team: Team = {
+        id: nextId([...store.teams, ...newTeams]),
+        name: sdifTeam.name || sdifTeam.code,
+        abbreviation: sdifTeam.abbreviation || sdifTeam.code,
+        lsc: sdifTeam.lsc,
+        createdAt: new Date().toISOString(),
+      };
+      newTeams.push(team);
+      teamIdMap.set(sdifTeam.code, team.id);
+    }
+  }
+
+  const allTeams = [...store.teams, ...newTeams];
+  const newAthletes: Athlete[] = [];
+  const athleteIdMap = new Map<string, number>();
+  for (const sdifTeam of sdif.teams) {
+    const teamId = teamIdMap.get(sdifTeam.code)!;
+    for (const e of sdifTeam.entries) {
+      const key = `${e.athleteFirstName}:${e.athleteLastName}:${teamId}`;
+      if (!athleteIdMap.has(key)) {
+        const existing = store.athletes.find(
+          (a) =>
+            a.firstName.toLowerCase() === e.athleteFirstName.toLowerCase() &&
+            a.lastName.toLowerCase() === e.athleteLastName.toLowerCase() &&
+            a.teamId === teamId
+        );
+        if (existing) {
+          athleteIdMap.set(key, existing.id);
+        } else {
+          const athlete: Athlete = {
+            id: nextId([...store.athletes, ...newAthletes]),
+            firstName: e.athleteFirstName,
+            lastName: e.athleteLastName,
+            gender: e.gender,
+            teamId,
+            idNumber: e.ussNumber || undefined,
+            dateOfBirth: parseSdifDate(e.dateOfBirth),
+            active: true,
+            createdAt: new Date().toISOString(),
+          };
+          newAthletes.push(athlete);
+          athleteIdMap.set(key, athlete.id);
+        }
+      }
+    }
+  }
+
+  const newEvents: Event[] = [];
+  const eventIdMap = new Map<number, number>();
+  const eventMeta = new Map<number, { gender: string; distance: number; stroke: string; ageMin: number; ageMax: number }>();
+  for (const sdifTeam of sdif.teams) {
+    for (const e of sdifTeam.entries) {
+      if (!eventMeta.has(e.eventNumber)) {
+        eventMeta.set(e.eventNumber, {
+          gender: e.eventGender,
+          distance: e.distance,
+          stroke: SDIF_STROKE_MAP[e.stroke] ?? "Freestyle",
+          ageMin: e.ageMin,
+          ageMax: e.ageMax,
+        });
+      }
+    }
+  }
+  for (const [eventNumber, meta] of eventMeta) {
+    const event: Event = {
+      id: nextId([...store.events, ...newEvents]),
+      meetId: meet.id,
+      eventNumber,
+      gender: meta.gender,
+      distance: meta.distance,
+      stroke: meta.stroke,
+      ageGroup: meta.ageMin > 0 ? `${meta.ageMin}-${meta.ageMax}` : undefined,
+      status: "pending",
+      createdAt: new Date().toISOString(),
+    };
+    newEvents.push(event);
+    eventIdMap.set(eventNumber, event.id);
+  }
+
+  const newEntries: Entry[] = [];
+  for (const sdifTeam of sdif.teams) {
+    const teamId = teamIdMap.get(sdifTeam.code)!;
+    for (const e of sdifTeam.entries) {
+      const key = `${e.athleteFirstName}:${e.athleteLastName}:${teamId}`;
+      const athleteId = athleteIdMap.get(key);
+      const eventId = eventIdMap.get(e.eventNumber);
+      if (!athleteId || !eventId) continue;
+      newEntries.push({
+        id: nextId([...store.entries, ...newEntries]),
+        meetId: meet.id,
+        eventId,
+        athleteId,
+        seedTime: e.seedTime ?? undefined,
+        seedCourse: e.seedCourse,
+        scratched: false,
+        createdAt: new Date().toISOString(),
+      });
+    }
+  }
+
+  writeStore({
+    ...store,
+    meets: [...store.meets, meet],
+    teams: [...store.teams, ...newTeams],
+    athletes: [...store.athletes, ...newAthletes],
+    events: [...store.events, ...newEvents],
+    entries: [...store.entries, ...newEntries],
   });
-  if (!r.ok) throw new Error(`API ${r.status}: ${await r.text()}`);
-  return r.json();
+
+  return { meetId: meet.id, teams: newTeams.length, entries: newEntries.length };
 }
 
 // ─── Import Tab ──────────────────────────────────────────────────────────────
@@ -74,7 +214,8 @@ function ImportTab() {
     setImporting(true);
     setError(null);
     try {
-      const result = await apiPost("/sdif/import", { rawText: rawFile });
+      const sdif = parseSDIF(rawFile);
+      const result = importSDIFLocally(sdif);
       setImportResult(result);
       toast({ title: "SDIF import complete", description: `${result.entries} entries imported` });
     } catch (err: any) {
@@ -284,29 +425,43 @@ function ExportTab() {
     setExporting(true);
     setError(null);
     try {
-      // Fetch full meet data
-      const [meet, events] = await Promise.all([
-        apiFetch(`/meets/${selectedMeet}`),
-        apiFetch(`/meets/${selectedMeet}/events`),
-      ]);
+      // Read all data from localStorage
+      const store = readStore();
+      const meetId = parseInt(selectedMeet, 10);
+      const meet = store.meets.find((m) => m.id === meetId);
+      if (!meet) throw new Error("Meet not found");
+      const events = store.events.filter((e) => e.meetId === meetId);
 
-      // Fetch entries for all events
       const allEntries: any[] = [];
       for (const event of events) {
-        const entries = await apiFetch(`/events/${event.id}/entries`);
-        for (const entry of entries) {
-          // Try to get result
-          let result = null;
-          if (exportType === "results" || exportType === "both") {
-            try {
-              result = await apiFetch(`/entries/${entry.id}/result`);
-            } catch {}
-          }
-          // Get athlete gender and DOB
+        const eventEntries = store.entries.filter((e) => e.eventId === event.id && !e.scratched);
+        for (const entry of eventEntries) {
+          const athlete = store.athletes.find((a) => a.id === entry.athleteId);
+          const team = athlete?.teamId ? store.teams.find((t) => t.id === athlete.teamId) : null;
+          const result =
+            exportType === "results" || exportType === "both"
+              ? store.results.find((r) => r.entryId === entry.id)
+              : null;
           allEntries.push({
             ...entry,
             eventId: event.id,
-            result: result ?? undefined,
+            athleteFirstName: athlete?.firstName ?? "",
+            athleteLastName: athlete?.lastName ?? "",
+            gender: athlete?.gender ?? event.gender,
+            dateOfBirth: athlete?.dateOfBirth,
+            ussNumber: athlete?.idNumber,
+            teamName: team?.name,
+            teamCode: team?.abbreviation ?? team?.name?.substring(0, 4) ?? "UNAT",
+            result: result
+              ? {
+                  finishTime: result.finishTime,
+                  place: result.place,
+                  dq: result.dq,
+                  dqCode: result.dqCode,
+                  ns: result.ns,
+                  dnf: result.dnf,
+                }
+              : undefined,
           });
         }
       }

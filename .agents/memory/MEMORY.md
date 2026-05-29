@@ -1,0 +1,1 @@
+- [SwimManager Pro localStorage arch](swim-manager-local-store.md) — full localStorage-based architecture, no backend required; all CRUD via local-store.ts hooks
