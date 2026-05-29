@@ -1,0 +1,1170 @@
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface Meet {
+  id: number;
+  name: string;
+  startDate: string;
+  endDate?: string;
+  facility?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  postalCode?: string;
+  course: string;
+  meetType: string;
+  meetStyle?: string;
+  meetClass?: string;
+  idFormat?: string;
+  hostLsc?: string;
+  altitude?: number;
+  entryDeadline?: string;
+  ageUpDate?: string;
+  status: string;
+  scoringRules?: string;
+  lanes: number;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface Athlete {
+  id: number;
+  firstName: string;
+  lastName: string;
+  gender: string;
+  dateOfBirth?: string;
+  teamId?: number;
+  teamName?: string;
+  idNumber?: string;
+  idFormat?: string;
+  phone?: string;
+  email?: string;
+  parentName?: string;
+  parentPhone?: string;
+  parentEmail?: string;
+  healthNotes?: string;
+  notes?: string;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface Team {
+  id: number;
+  name: string;
+  shortName?: string;
+  abbreviation?: string;
+  lsc?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  postalCode?: string;
+  phone?: string;
+  email?: string;
+  website?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface Event {
+  id: number;
+  meetId: number;
+  eventNumber: number;
+  gender: string;
+  ageGroup?: string;
+  distance: number;
+  stroke: string;
+  course?: string;
+  eventType?: string;
+  heatOrder?: string;
+  isRelay?: boolean;
+  status: string;
+  entryCount?: number;
+  heatCount?: number;
+  createdAt: string;
+}
+
+export interface Entry {
+  id: number;
+  meetId: number;
+  eventId: number;
+  athleteId: number;
+  athleteName?: string;
+  teamName?: string;
+  seedTime?: number;
+  seedCourse?: string;
+  lane?: number;
+  heat?: number;
+  scratched: boolean;
+  createdAt: string;
+}
+
+export interface LaneInfo {
+  laneNumber: number;
+  entryId: number | null;
+  athleteId: number | null;
+  athleteName: string;
+  teamName: string;
+  seedTime: number | null;
+  finishTime: number | null;
+  place: number | null;
+  dq: boolean;
+  dqCode?: string;
+  ns: boolean;
+  dnf: boolean;
+  splits?: string;
+}
+
+export interface Heat {
+  id: number;
+  eventId: number;
+  meetId: number;
+  heatNumber: number;
+  lanes: LaneInfo[];
+}
+
+export interface Result {
+  id: number;
+  entryId: number;
+  eventId: number;
+  finishTime?: number;
+  place?: number;
+  points?: number;
+  dq: boolean;
+  dqCode?: string;
+  ns: boolean;
+  dnf: boolean;
+  splits?: string;
+}
+
+export interface Session {
+  id: number;
+  meetId: number;
+  name: string;
+  date?: string;
+  startTime?: string;
+  warmupTime?: string;
+  notes?: string;
+}
+
+export interface Workout {
+  id: number;
+  name: string;
+  date?: string;
+  focus?: string;
+  sets?: string;
+  notes?: string;
+  teamId?: number;
+  createdAt: string;
+}
+
+export interface Invoice {
+  id: number;
+  athleteId?: number;
+  athleteName?: string;
+  amount: number;
+  dueDate?: string;
+  status: string;
+  description?: string;
+  createdAt: string;
+}
+
+export interface Club {
+  id: number;
+  name: string;
+  abbreviation?: string;
+  lsc?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  postalCode?: string;
+  phone?: string;
+  email?: string;
+  website?: string;
+}
+
+export interface ActivityItem {
+  id: string;
+  type: string;
+  description: string;
+  timestamp: string;
+  entityId?: number | null;
+  entityName?: string | null;
+}
+
+// ─── Store shape ─────────────────────────────────────────────────────────────
+
+interface AppStore {
+  meets: Meet[];
+  athletes: Athlete[];
+  teams: Team[];
+  events: Event[];
+  entries: Entry[];
+  heats: Heat[];
+  results: Result[];
+  sessions: Session[];
+  workouts: Workout[];
+  invoices: Invoice[];
+  club: Club;
+}
+
+const DEFAULT_STORE: AppStore = {
+  meets: [],
+  athletes: [],
+  teams: [],
+  events: [],
+  entries: [],
+  heats: [],
+  results: [],
+  sessions: [],
+  workouts: [],
+  invoices: [],
+  club: { id: 1, name: "My Swimming Club" },
+};
+
+export interface AppSettings {
+  backupUrl: string;
+  backupIntervalMinutes: number;
+  lastBackupAt: string | null;
+  lastBackupStatus: "success" | "error" | null;
+}
+
+const DEFAULT_SETTINGS: AppSettings = {
+  backupUrl: "",
+  backupIntervalMinutes: 30,
+  lastBackupAt: null,
+  lastBackupStatus: null,
+};
+
+const STORE_KEY = "swimmanager_data";
+const SETTINGS_KEY = "swimmanager_settings";
+
+// ─── Raw read / write ─────────────────────────────────────────────────────────
+
+export function readStore(): AppStore {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return DEFAULT_STORE;
+    return { ...DEFAULT_STORE, ...JSON.parse(raw) };
+  } catch {
+    return DEFAULT_STORE;
+  }
+}
+
+export function writeStore(store: AppStore): void {
+  localStorage.setItem(STORE_KEY, JSON.stringify(store));
+}
+
+export function readSettings(): AppSettings {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return DEFAULT_SETTINGS;
+    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
+
+export function writeSettings(settings: AppSettings): void {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+}
+
+function nextId(items: { id: number }[]): number {
+  if (!items || items.length === 0) return 1;
+  return Math.max(...items.map((i) => i.id)) + 1;
+}
+
+function now(): string {
+  return new Date().toISOString();
+}
+
+// ─── Query key factories ──────────────────────────────────────────────────────
+
+export const getListEventsQueryKey = (meetId?: number) =>
+  ["events", meetId] as const;
+export const getListHeatsQueryKey = (eventId?: number) =>
+  ["heats", eventId] as const;
+export const getListSessionsQueryKey = (meetId?: number) =>
+  ["sessions", meetId] as const;
+export const getListEntriesQueryKey = (eventId?: number) =>
+  ["entries", eventId] as const;
+export const getGetMeetQueryKey = (id?: number) => ["meet", id] as const;
+export const getGetAthleteQueryKey = (id?: number) =>
+  ["athlete", id] as const;
+export const getGetTeamQueryKey = (id?: number) => ["team", id] as const;
+export const getGetWorkoutQueryKey = (id?: number) =>
+  ["workout", id] as const;
+export const getGetMeetTeamScoresQueryKey = (meetId?: number) =>
+  ["meetTeamScores", meetId] as const;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function enrichAthletes(athletes: Athlete[], teams: Team[]): Athlete[] {
+  return athletes.map((a) => ({
+    ...a,
+    teamName: a.teamId
+      ? (teams.find((t) => t.id === a.teamId)?.name ?? undefined)
+      : undefined,
+  }));
+}
+
+function enrichEvents(events: Event[], entries: Entry[], heats: Heat[]): Event[] {
+  return events.map((e) => ({
+    ...e,
+    entryCount: entries.filter((en) => en.eventId === e.id && !en.scratched).length,
+    heatCount: heats.filter((h) => h.eventId === e.id).length,
+  }));
+}
+
+function populateHeatLanes(
+  heats: Heat[],
+  entries: Entry[],
+  athletes: Athlete[],
+  teams: Team[],
+  results: Result[]
+): Heat[] {
+  return heats.map((heat) => ({
+    ...heat,
+    lanes: heat.lanes.map((lane) => {
+      if (!lane.entryId) return lane;
+      const entry = entries.find((e) => e.id === lane.entryId);
+      const athlete = entry ? athletes.find((a) => a.id === entry.athleteId) : null;
+      const team = athlete?.teamId ? teams.find((t) => t.id === athlete.teamId) : null;
+      const result = entry ? results.find((r) => r.entryId === entry.id) : null;
+      return {
+        ...lane,
+        athleteName: athlete
+          ? `${athlete.firstName} ${athlete.lastName}`
+          : lane.athleteName,
+        teamName: team?.name ?? lane.teamName,
+        finishTime: result?.finishTime ?? null,
+        place: result?.place ?? null,
+        dq: result?.dq ?? false,
+        dqCode: result?.dqCode,
+        ns: result?.ns ?? false,
+        dnf: result?.dnf ?? false,
+        splits: result?.splits,
+      };
+    }),
+  }));
+}
+
+// ─── Meets ────────────────────────────────────────────────────────────────────
+
+export function useListMeets() {
+  return useQuery({
+    queryKey: ["meets"],
+    queryFn: () => readStore().meets.sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    staleTime: 0,
+  });
+}
+
+export function useGetMeet(id: number, options?: object) {
+  return useQuery({
+    queryKey: getGetMeetQueryKey(id),
+    queryFn: () => readStore().meets.find((m) => m.id === id) ?? null,
+    staleTime: 0,
+    enabled: !!id,
+    ...(options as object),
+  });
+}
+
+export function useCreateMeet() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ data }: { data: Omit<Meet, "id" | "createdAt" | "status"> }) => {
+      const store = readStore();
+      const meet: Meet = {
+        ...data,
+        id: nextId(store.meets),
+        status: "scheduled",
+        createdAt: now(),
+      };
+      writeStore({ ...store, meets: [...store.meets, meet] });
+      return meet;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["meets"] }),
+  });
+}
+
+export function useUpdateMeet() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<Meet> }) => {
+      const store = readStore();
+      const meets = store.meets.map((m) => (m.id === id ? { ...m, ...data } : m));
+      writeStore({ ...store, meets });
+      return meets.find((m) => m.id === id)!;
+    },
+    onSuccess: (_r, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ["meets"] });
+      queryClient.invalidateQueries({ queryKey: getGetMeetQueryKey(id) });
+    },
+  });
+}
+
+export function useDeleteMeet() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }: { id: number }) => {
+      const store = readStore();
+      writeStore({ ...store, meets: store.meets.filter((m) => m.id !== id) });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["meets"] }),
+  });
+}
+
+// ─── Athletes ─────────────────────────────────────────────────────────────────
+
+export function useListAthletes() {
+  return useQuery({
+    queryKey: ["athletes"],
+    queryFn: () => {
+      const { athletes, teams } = readStore();
+      return enrichAthletes(athletes, teams);
+    },
+    staleTime: 0,
+  });
+}
+
+export function useGetAthlete(id: number) {
+  return useQuery({
+    queryKey: getGetAthleteQueryKey(id),
+    queryFn: () => {
+      const { athletes, teams } = readStore();
+      const a = athletes.find((a) => a.id === id);
+      if (!a) return null;
+      return enrichAthletes([a], teams)[0];
+    },
+    staleTime: 0,
+    enabled: !!id,
+  });
+}
+
+export function useCreateAthlete() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ data }: { data: Omit<Athlete, "id" | "createdAt"> }) => {
+      const store = readStore();
+      const athlete: Athlete = {
+        ...data,
+        id: nextId(store.athletes),
+        active: data.active ?? true,
+        createdAt: now(),
+      };
+      writeStore({ ...store, athletes: [...store.athletes, athlete] });
+      return athlete;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["athletes"] }),
+  });
+}
+
+export function useUpdateAthlete() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<Athlete> }) => {
+      const store = readStore();
+      const athletes = store.athletes.map((a) => (a.id === id ? { ...a, ...data } : a));
+      writeStore({ ...store, athletes });
+      return athletes.find((a) => a.id === id)!;
+    },
+    onSuccess: (_r, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ["athletes"] });
+      queryClient.invalidateQueries({ queryKey: getGetAthleteQueryKey(id) });
+    },
+  });
+}
+
+// ─── Teams ────────────────────────────────────────────────────────────────────
+
+export function useListTeams() {
+  return useQuery({
+    queryKey: ["teams"],
+    queryFn: () => readStore().teams,
+    staleTime: 0,
+  });
+}
+
+export function useGetTeam(id: number) {
+  return useQuery({
+    queryKey: getGetTeamQueryKey(id),
+    queryFn: () => readStore().teams.find((t) => t.id === id) ?? null,
+    staleTime: 0,
+    enabled: !!id,
+  });
+}
+
+export function useCreateTeam() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ data }: { data: Omit<Team, "id" | "createdAt"> }) => {
+      const store = readStore();
+      const team: Team = { ...data, id: nextId(store.teams), createdAt: now() };
+      writeStore({ ...store, teams: [...store.teams, team] });
+      return team;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["teams"] }),
+  });
+}
+
+export function useUpdateTeam() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<Team> }) => {
+      const store = readStore();
+      const teams = store.teams.map((t) => (t.id === id ? { ...t, ...data } : t));
+      writeStore({ ...store, teams });
+      return teams.find((t) => t.id === id)!;
+    },
+    onSuccess: (_r, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ["teams"] });
+      queryClient.invalidateQueries({ queryKey: getGetTeamQueryKey(id) });
+    },
+  });
+}
+
+// ─── Events ───────────────────────────────────────────────────────────────────
+
+export function useListEvents(meetId?: number, options?: object) {
+  return useQuery({
+    queryKey: getListEventsQueryKey(meetId),
+    queryFn: () => {
+      const store = readStore();
+      const events = meetId
+        ? store.events.filter((e) => e.meetId === meetId)
+        : store.events;
+      return enrichEvents(
+        events.sort((a, b) => a.eventNumber - b.eventNumber),
+        store.entries,
+        store.heats
+      );
+    },
+    staleTime: 0,
+    enabled: meetId !== 0,
+    ...(options as object),
+  });
+}
+
+export function useCreateEvent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ data }: { data: Omit<Event, "id" | "createdAt" | "status" | "entryCount" | "heatCount"> }) => {
+      const store = readStore();
+      const event: Event = {
+        ...data,
+        id: nextId(store.events),
+        status: "pending",
+        createdAt: now(),
+      };
+      writeStore({ ...store, events: [...store.events, event] });
+      return event;
+    },
+    onSuccess: (_r, { data }) => {
+      queryClient.invalidateQueries({ queryKey: getListEventsQueryKey(data.meetId) });
+      queryClient.invalidateQueries({ queryKey: ["events"] });
+    },
+  });
+}
+
+export function useUpdateEvent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<Event> }) => {
+      const store = readStore();
+      const events = store.events.map((e) => (e.id === id ? { ...e, ...data } : e));
+      writeStore({ ...store, events });
+      const evt = events.find((e) => e.id === id)!;
+      queryClient.invalidateQueries({ queryKey: getListEventsQueryKey(evt.meetId) });
+      return evt;
+    },
+  });
+}
+
+export function useDeleteEvent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }: { id: number }) => {
+      const store = readStore();
+      const evt = store.events.find((e) => e.id === id);
+      writeStore({
+        ...store,
+        events: store.events.filter((e) => e.id !== id),
+        entries: store.entries.filter((e) => e.eventId !== id),
+        heats: store.heats.filter((h) => h.eventId !== id),
+      });
+      if (evt) queryClient.invalidateQueries({ queryKey: getListEventsQueryKey(evt.meetId) });
+    },
+  });
+}
+
+// ─── Entries ──────────────────────────────────────────────────────────────────
+
+export function useListEntries(eventId?: number, options?: object) {
+  return useQuery({
+    queryKey: getListEntriesQueryKey(eventId),
+    queryFn: () => {
+      const store = readStore();
+      const entries = eventId
+        ? store.entries.filter((e) => e.eventId === eventId)
+        : store.entries;
+      return entries.map((entry) => {
+        const athlete = store.athletes.find((a) => a.id === entry.athleteId);
+        const team = athlete?.teamId
+          ? store.teams.find((t) => t.id === athlete.teamId)
+          : null;
+        return {
+          ...entry,
+          athleteName: athlete
+            ? `${athlete.firstName} ${athlete.lastName}`
+            : entry.athleteName,
+          teamName: team?.name ?? entry.teamName,
+        };
+      });
+    },
+    staleTime: 0,
+    enabled: eventId !== 0,
+    ...(options as object),
+  });
+}
+
+export function useCreateEntry() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      data,
+    }: {
+      data: Omit<Entry, "id" | "createdAt" | "scratched" | "athleteName" | "teamName">;
+    }) => {
+      const store = readStore();
+      const athlete = store.athletes.find((a) => a.id === data.athleteId);
+      const team = athlete?.teamId
+        ? store.teams.find((t) => t.id === athlete.teamId)
+        : null;
+      const entry: Entry = {
+        ...data,
+        id: nextId(store.entries),
+        scratched: false,
+        athleteName: athlete ? `${athlete.firstName} ${athlete.lastName}` : undefined,
+        teamName: team?.name,
+        createdAt: now(),
+      };
+      writeStore({ ...store, entries: [...store.entries, entry] });
+      queryClient.invalidateQueries({ queryKey: getListEntriesQueryKey(data.eventId) });
+      queryClient.invalidateQueries({ queryKey: getListEventsQueryKey(data.meetId) });
+      return entry;
+    },
+  });
+}
+
+export function useUpdateEntry() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<Entry> }) => {
+      const store = readStore();
+      const entries = store.entries.map((e) => (e.id === id ? { ...e, ...data } : e));
+      writeStore({ ...store, entries });
+      const entry = entries.find((e) => e.id === id)!;
+      queryClient.invalidateQueries({ queryKey: getListEntriesQueryKey(entry.eventId) });
+      return entry;
+    },
+  });
+}
+
+export function useDeleteEntry() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }: { id: number }) => {
+      const store = readStore();
+      const entry = store.entries.find((e) => e.id === id);
+      writeStore({
+        ...store,
+        entries: store.entries.filter((e) => e.id !== id),
+        results: store.results.filter((r) => r.entryId !== id),
+      });
+      if (entry) {
+        queryClient.invalidateQueries({ queryKey: getListEntriesQueryKey(entry.eventId) });
+        queryClient.invalidateQueries({ queryKey: getListEventsQueryKey(entry.meetId) });
+      }
+    },
+  });
+}
+
+// ─── Heats / Seeding ──────────────────────────────────────────────────────────
+
+export function useListHeats(eventId?: number, options?: object) {
+  return useQuery({
+    queryKey: getListHeatsQueryKey(eventId),
+    queryFn: () => {
+      const store = readStore();
+      const heats = eventId
+        ? store.heats.filter((h) => h.eventId === eventId)
+        : store.heats;
+      return populateHeatLanes(
+        heats.sort((a, b) => a.heatNumber - b.heatNumber),
+        store.entries,
+        store.athletes,
+        store.teams,
+        store.results
+      );
+    },
+    staleTime: 0,
+    enabled: eventId !== 0,
+    ...(options as object),
+  });
+}
+
+function circleSeeding(numLanes: number): number[] {
+  const mid = Math.ceil(numLanes / 2);
+  const order: number[] = [mid];
+  for (let i = 1; i <= numLanes; i++) {
+    if (mid + i <= numLanes) order.push(mid + i);
+    if (mid - i >= 1) order.push(mid - i);
+    if (order.length >= numLanes) break;
+  }
+  return order;
+}
+
+export function useSeedEvent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      eventId,
+      data,
+    }: {
+      eventId: number;
+      data: { lanes?: number; order?: string; circleSeeding?: boolean };
+    }) => {
+      const store = readStore();
+      const event = store.events.find((e) => e.id === eventId);
+      if (!event) throw new Error("Event not found");
+
+      const numLanes = data.lanes ?? event.lanes ?? 8;
+      const slowToFast = (data.order ?? "slow_to_fast") === "slow_to_fast";
+      const useCircle = data.circleSeeding !== false;
+
+      const eventEntries = store.entries.filter(
+        (e) => e.eventId === eventId && !e.scratched
+      );
+
+      const sorted = [...eventEntries].sort((a, b) => {
+        const aTime = a.seedTime ?? (slowToFast ? 0 : Infinity);
+        const bTime = b.seedTime ?? (slowToFast ? 0 : Infinity);
+        return slowToFast ? aTime - bTime : bTime - aTime;
+      });
+
+      const numHeats = Math.ceil(sorted.length / numLanes);
+      const laneOrder = useCircle ? circleSeeding(numLanes) : Array.from({ length: numLanes }, (_, i) => i + 1);
+      const newHeats: Heat[] = [];
+      const updatedEntries = [...store.entries];
+
+      for (let h = 0; h < numHeats; h++) {
+        const heatEntries = sorted.slice(h * numLanes, (h + 1) * numLanes);
+        const lanes: LaneInfo[] = Array.from({ length: numLanes }, (_, i) => ({
+          laneNumber: i + 1,
+          entryId: null,
+          athleteId: null,
+          athleteName: "",
+          teamName: "",
+          seedTime: null,
+          finishTime: null,
+          place: null,
+          dq: false,
+          ns: false,
+          dnf: false,
+        }));
+
+        heatEntries.forEach((entry, idx) => {
+          const lane = laneOrder[idx] - 1;
+          lanes[lane] = {
+            ...lanes[lane],
+            entryId: entry.id,
+            athleteId: entry.athleteId,
+            athleteName: entry.athleteName ?? "",
+            teamName: entry.teamName ?? "",
+            seedTime: entry.seedTime ?? null,
+          };
+          const ei = updatedEntries.findIndex((e) => e.id === entry.id);
+          if (ei >= 0) {
+            updatedEntries[ei] = {
+              ...updatedEntries[ei],
+              heat: h + 1,
+              lane: laneOrder[idx],
+            };
+          }
+        });
+
+        newHeats.push({
+          id: nextId([...store.heats, ...newHeats]),
+          eventId,
+          meetId: event.meetId,
+          heatNumber: h + 1,
+          lanes,
+        });
+      }
+
+      const filteredHeats = store.heats.filter((h) => h.eventId !== eventId);
+      const updatedEvents = store.events.map((e) =>
+        e.id === eventId ? { ...e, status: "seeded" } : e
+      );
+
+      writeStore({
+        ...store,
+        heats: [...filteredHeats, ...newHeats],
+        entries: updatedEntries,
+        events: updatedEvents,
+      });
+
+      queryClient.invalidateQueries({ queryKey: getListHeatsQueryKey(eventId) });
+      queryClient.invalidateQueries({ queryKey: getListEventsQueryKey(event.meetId) });
+      queryClient.invalidateQueries({ queryKey: getListEntriesQueryKey(eventId) });
+      return newHeats;
+    },
+  });
+}
+
+// ─── Results ──────────────────────────────────────────────────────────────────
+
+export function useSetResult() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      eventId,
+      data,
+    }: {
+      eventId: number;
+      data: {
+        entryId: number;
+        finishTime?: number;
+        place?: number;
+        dq?: boolean;
+        dqCode?: string;
+        ns?: boolean;
+        dnf?: boolean;
+        splits?: string;
+      };
+    }) => {
+      const store = readStore();
+      const existing = store.results.find((r) => r.entryId === data.entryId);
+      let results: Result[];
+      if (existing) {
+        results = store.results.map((r) =>
+          r.entryId === data.entryId
+            ? {
+                ...r,
+                ...data,
+                dq: data.dq ?? false,
+                ns: data.ns ?? false,
+                dnf: data.dnf ?? false,
+              }
+            : r
+        );
+      } else {
+        const newResult: Result = {
+          id: nextId(store.results),
+          entryId: data.entryId,
+          eventId,
+          finishTime: data.finishTime,
+          place: data.place,
+          dq: data.dq ?? false,
+          dqCode: data.dqCode,
+          ns: data.ns ?? false,
+          dnf: data.dnf ?? false,
+          splits: data.splits,
+        };
+        results = [...store.results, newResult];
+      }
+
+      const event = store.events.find((e) => e.id === eventId);
+      let events = store.events;
+      if (event && event.status === "seeded") {
+        events = store.events.map((e) =>
+          e.id === eventId ? { ...e, status: "completed" } : e
+        );
+      }
+
+      writeStore({ ...store, results, events });
+      queryClient.invalidateQueries({ queryKey: getListHeatsQueryKey(eventId) });
+      if (event) queryClient.invalidateQueries({ queryKey: getListEventsQueryKey(event.meetId) });
+      return results.find((r) => r.entryId === data.entryId)!;
+    },
+  });
+}
+
+// ─── Sessions ─────────────────────────────────────────────────────────────────
+
+export function useListSessions(meetId?: number, options?: object) {
+  return useQuery({
+    queryKey: getListSessionsQueryKey(meetId),
+    queryFn: () => {
+      const { sessions } = readStore();
+      return meetId ? sessions.filter((s) => s.meetId === meetId) : sessions;
+    },
+    staleTime: 0,
+    enabled: meetId !== 0,
+    ...(options as object),
+  });
+}
+
+export function useCreateSession() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ data }: { data: Omit<Session, "id"> }) => {
+      const store = readStore();
+      const session: Session = { ...data, id: nextId(store.sessions) };
+      writeStore({ ...store, sessions: [...store.sessions, session] });
+      return session;
+    },
+    onSuccess: (_r, { data }) =>
+      queryClient.invalidateQueries({ queryKey: getListSessionsQueryKey(data.meetId) }),
+  });
+}
+
+// ─── Time Standards ───────────────────────────────────────────────────────────
+
+export function useListTimeStandards() {
+  return useQuery({ queryKey: ["timeStandards"], queryFn: () => [], staleTime: Infinity });
+}
+
+// ─── Team Scores ──────────────────────────────────────────────────────────────
+
+export function useGetMeetTeamScores(meetId?: number, options?: object) {
+  return useQuery({
+    queryKey: getGetMeetTeamScoresQueryKey(meetId),
+    queryFn: () => {
+      if (!meetId) return [];
+      const store = readStore();
+      const scoreMap = new Map<number, { teamId: number; teamName: string; score: number }>();
+      const meetEvents = store.events.filter((e) => e.meetId === meetId).map((e) => e.id);
+      store.results.forEach((result) => {
+        if (!meetEvents.includes(result.eventId) || result.dq || result.ns || result.dnf) return;
+        const entry = store.entries.find((e) => e.id === result.entryId);
+        if (!entry) return;
+        const athlete = store.athletes.find((a) => a.id === entry.athleteId);
+        if (!athlete?.teamId) return;
+        const team = store.teams.find((t) => t.id === athlete.teamId);
+        if (!team) return;
+        const points = result.points ?? pointsForPlace(result.place);
+        const existing = scoreMap.get(athlete.teamId);
+        if (existing) existing.score += points;
+        else scoreMap.set(athlete.teamId, { teamId: athlete.teamId, teamName: team.name, score: points });
+      });
+      return Array.from(scoreMap.values()).sort((a, b) => b.score - a.score);
+    },
+    staleTime: 0,
+    ...(options as object),
+  });
+}
+
+function pointsForPlace(place?: number): number {
+  if (!place) return 0;
+  const pts: Record<number, number> = { 1: 9, 2: 7, 3: 6, 4: 5, 5: 4, 6: 3, 7: 2, 8: 1 };
+  return pts[place] ?? 0;
+}
+
+// ─── Workouts ─────────────────────────────────────────────────────────────────
+
+export function useListWorkouts() {
+  return useQuery({
+    queryKey: ["workouts"],
+    queryFn: () => readStore().workouts.sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    staleTime: 0,
+  });
+}
+
+export function useGetWorkout(id: number) {
+  return useQuery({
+    queryKey: getGetWorkoutQueryKey(id),
+    queryFn: () => readStore().workouts.find((w) => w.id === id) ?? null,
+    staleTime: 0,
+    enabled: !!id,
+  });
+}
+
+export function useCreateWorkout() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ data }: { data: Omit<Workout, "id" | "createdAt"> }) => {
+      const store = readStore();
+      const workout: Workout = { ...data, id: nextId(store.workouts), createdAt: now() };
+      writeStore({ ...store, workouts: [...store.workouts, workout] });
+      return workout;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workouts"] }),
+  });
+}
+
+export function useUpdateWorkout() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<Workout> }) => {
+      const store = readStore();
+      const workouts = store.workouts.map((w) => (w.id === id ? { ...w, ...data } : w));
+      writeStore({ ...store, workouts });
+      return workouts.find((w) => w.id === id)!;
+    },
+    onSuccess: (_r, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ["workouts"] });
+      queryClient.invalidateQueries({ queryKey: getGetWorkoutQueryKey(id) });
+    },
+  });
+}
+
+// ─── Billing ──────────────────────────────────────────────────────────────────
+
+export function useListInvoices() {
+  return useQuery({
+    queryKey: ["invoices"],
+    queryFn: () => readStore().invoices.sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    staleTime: 0,
+  });
+}
+
+export function useCreateInvoice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ data }: { data: Omit<Invoice, "id" | "createdAt"> }) => {
+      const store = readStore();
+      const athlete = data.athleteId
+        ? store.athletes.find((a) => a.id === data.athleteId)
+        : null;
+      const invoice: Invoice = {
+        ...data,
+        id: nextId(store.invoices),
+        athleteName: athlete ? `${athlete.firstName} ${athlete.lastName}` : data.athleteName,
+        createdAt: now(),
+      };
+      writeStore({ ...store, invoices: [...store.invoices, invoice] });
+      return invoice;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["invoices"] }),
+  });
+}
+
+export function useGetBillingSummary() {
+  return useQuery({
+    queryKey: ["billingSummary"],
+    queryFn: () => {
+      const { invoices } = readStore();
+      return {
+        total: invoices.reduce((s, i) => s + i.amount, 0),
+        outstanding: invoices
+          .filter((i) => i.status === "outstanding")
+          .reduce((s, i) => s + i.amount, 0),
+        paid: invoices.filter((i) => i.status === "paid").reduce((s, i) => s + i.amount, 0),
+        count: invoices.length,
+        overdueCount: invoices.filter((i) => {
+          if (i.status !== "outstanding") return false;
+          if (!i.dueDate) return false;
+          return new Date(i.dueDate) < new Date();
+        }).length,
+      };
+    },
+    staleTime: 0,
+  });
+}
+
+// ─── Dashboard ────────────────────────────────────────────────────────────────
+
+export function useGetDashboardStats() {
+  return useQuery({
+    queryKey: ["dashboardStats"],
+    queryFn: () => {
+      const store = readStore();
+      const today = new Date().toISOString().split("T")[0];
+      return {
+        totalMeets: store.meets.length,
+        activeMeets: store.meets.filter((m) => m.status === "in_progress").length,
+        upcomingMeets: store.meets.filter((m) => m.startDate > today).length,
+        totalAthletes: store.athletes.filter((a) => a.active).length,
+        totalTeams: store.teams.length,
+        totalWorkouts: store.workouts.length,
+        outstandingBilling: store.invoices
+          .filter((i) => i.status === "outstanding")
+          .reduce((s, i) => s + i.amount, 0),
+      };
+    },
+    staleTime: 0,
+  });
+}
+
+export function useGetRecentActivity() {
+  return useQuery({
+    queryKey: ["recentActivity"],
+    queryFn: (): ActivityItem[] => {
+      const store = readStore();
+      const items: ActivityItem[] = [];
+      store.meets.slice(-5).forEach((m) =>
+        items.push({ id: `meet-${m.id}`, type: "meet", description: `Meet "${m.name}" created`, timestamp: m.createdAt, entityId: m.id, entityName: m.name })
+      );
+      store.athletes.slice(-5).forEach((a) =>
+        items.push({ id: `athlete-${a.id}`, type: "athlete", description: `Athlete ${a.firstName} ${a.lastName} added`, timestamp: a.createdAt, entityId: a.id, entityName: `${a.firstName} ${a.lastName}` })
+      );
+      return items.sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 10);
+    },
+    staleTime: 0,
+  });
+}
+
+// ─── Club / Settings ──────────────────────────────────────────────────────────
+
+export function useGetClub() {
+  return useQuery({
+    queryKey: ["club"],
+    queryFn: () => readStore().club,
+    staleTime: 0,
+  });
+}
+
+export function useUpdateClub() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ data }: { data: Partial<Club> }) => {
+      const store = readStore();
+      const club = { ...store.club, ...data };
+      writeStore({ ...store, club });
+      return club;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["club"] }),
+  });
+}
+
+// ─── Settings (backup config) ─────────────────────────────────────────────────
+
+export function useGetSettings() {
+  return useQuery({
+    queryKey: ["settings"],
+    queryFn: () => readSettings(),
+    staleTime: 0,
+  });
+}
+
+export function useUpdateSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: Partial<AppSettings>) => {
+      const settings = { ...readSettings(), ...data };
+      writeSettings(settings);
+      return settings;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["settings"] }),
+  });
+}
+
+// ─── Data export / import ─────────────────────────────────────────────────────
+
+export function exportAllData(): string {
+  return JSON.stringify({ store: readStore(), settings: readSettings() }, null, 2);
+}
+
+export function importAllData(json: string): void {
+  const parsed = JSON.parse(json);
+  if (parsed.store) writeStore({ ...DEFAULT_STORE, ...parsed.store });
+  if (parsed.settings) writeSettings({ ...DEFAULT_SETTINGS, ...parsed.settings });
+}
+
+export function clearAllData(): void {
+  writeStore(DEFAULT_STORE);
+}
