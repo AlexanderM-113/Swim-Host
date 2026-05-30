@@ -71,6 +71,7 @@ export interface Team {
 export interface Event {
   id: number;
   meetId: number;
+  sessionId?: number;
   eventNumber: number;
   gender: string;
   ageGroup?: string;
@@ -142,6 +143,8 @@ export interface Result {
 export interface Session {
   id: number;
   meetId: number;
+  sessionNumber?: number;
+  sessionType?: string;
   name: string;
   date?: string;
   startTime?: string;
@@ -919,6 +922,38 @@ export function useCreateSession() {
     },
     onSuccess: (_r, { data }) =>
       queryClient.invalidateQueries({ queryKey: getListSessionsQueryKey(data.meetId) }),
+  });
+}
+
+export function useUpdateSession() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<Session> }) => {
+      const store = readStore();
+      const sessions = store.sessions.map((s) => (s.id === id ? { ...s, ...data } : s));
+      writeStore({ ...store, sessions });
+      return sessions.find((s) => s.id === id)!;
+    },
+    onSuccess: (session) => {
+      queryClient.invalidateQueries({ queryKey: getListSessionsQueryKey(session.meetId) });
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+    },
+  });
+}
+
+export function useDeleteSession() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }: { id: number }) => {
+      const store = readStore();
+      const session = store.sessions.find((s) => s.id === id);
+      writeStore({ ...store, sessions: store.sessions.filter((s) => s.id !== id) });
+      return session;
+    },
+    onSuccess: (session) => {
+      if (session) queryClient.invalidateQueries({ queryKey: getListSessionsQueryKey(session.meetId) });
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+    },
   });
 }
 
