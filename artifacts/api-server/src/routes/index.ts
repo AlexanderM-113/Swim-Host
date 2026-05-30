@@ -16,6 +16,10 @@ import billingRouter from "./billing";
 import dashboardRouter from "./dashboard";
 import reportsRouter from "./reports";
 import sdifRouter from "./sdif";
+import officialsRouter from "./officials";
+import recordsRouter from "./records";
+import groupsRouter from "./groups";
+import attendanceRouter from "./attendance";
 
 const router: IRouter = Router();
 
@@ -36,5 +40,9 @@ router.use(billingRouter);
 router.use(dashboardRouter);
 router.use(reportsRouter);
 router.use(sdifRouter);
+router.use(officialsRouter);
+router.use(recordsRouter);
+router.use(groupsRouter);
+router.use(attendanceRouter);
 
 export default router;

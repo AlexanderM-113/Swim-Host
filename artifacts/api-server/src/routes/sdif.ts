@@ -204,7 +204,7 @@ router.get("/app/download", async (req, res): Promise<void> => {
     const dirs = ["artifacts/api-server", "artifacts/swim-manager", "lib", "scripts"];
     const rootFiles = ["package.json", "pnpm-workspace.yaml", "tsconfig.base.json", "tsconfig.json", ".npmrc", "replit.md"];
 
-    function addDir(zipFolder: JSZip, diskPath: string, relativePath: string) {
+    function addDir(zipFolder: any, diskPath: string, relativePath: string) {
       if (!fs.existsSync(diskPath)) return;
       const items = fs.readdirSync(diskPath);
       for (const item of items) {

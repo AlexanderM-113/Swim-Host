@@ -1,0 +1,553 @@
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useListMeets, useListEvents, useListHeats, useSetResult, getListHeatsQueryKey } from "@/lib/local-store";
+import { formatTime } from "@/lib/format-time";
+import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  Timer, WifiOff, Play, Square, RotateCcw,
+  Settings, Zap, Radio, CheckCircle2, Keyboard, AlertTriangle, ChevronRight, Wifi
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+
+type HardwareMode = "manual" | "cts" | "daktronics" | "omega" | "sim";
+
+interface LaneTime {
+  lane: number;
+  time: number | null;
+  split1: number | null;
+  split2: number | null;
+  touched: boolean;
+  dq: boolean;
+  ns: boolean;
+}
+
+interface HwConfig {
+  mode: HardwareMode;
+  ip: string;
+  port: string;
+}
+
+const MODE_LABELS: Record<HardwareMode, string> = {
+  manual: "Manual (Keyboard / Button)",
+  cts: "Colorado Timing (CTS Dolphin)",
+  daktronics: "Daktronics OmniSport 6000",
+  omega: "Omega ARES 21",
+  sim: "Simulation (Auto-generate times)",
+};
+
+const DQ_CODES = [
+  { code: "1A", label: "False Start" },
+  { code: "2A", label: "Freestyle — Stroke Infraction" },
+  { code: "2B", label: "Backstroke — Stroke Infraction" },
+  { code: "2C", label: "Breaststroke — Stroke Infraction" },
+  { code: "2D", label: "Butterfly — Stroke Infraction" },
+  { code: "3A", label: "No Touch / Illegal Touch" },
+  { code: "3B", label: "Backstroke Turn" },
+  { code: "3C", label: "Breaststroke / Butterfly Turn" },
+  { code: "3D", label: "Relay Exchange" },
+  { code: "3E", label: "Backstroke — Not on Signal" },
+  { code: "4A", label: "Unsportsmanlike Conduct" },
+  { code: "4B", label: "Starting Before Signal" },
+  { code: "5A", label: "Other / Unspecified" },
+  { code: "6A", label: "Relay — False Start" },
+  { code: "6B", label: "Relay — Starting Before Touch" },
+  { code: "7A", label: "Head Submerged" },
+];
+
+function buildLanes(lanes: number): LaneTime[] {
+  return Array.from({ length: lanes }, (_, i) => ({
+    lane: i + 1,
+    time: null,
+    split1: null,
+    split2: null,
+    touched: false,
+    dq: false,
+    ns: false,
+  }));
+}
+
+function ElapsedClock({ running, elapsed }: { running: boolean; elapsed: number }) {
+  const mm = Math.floor(elapsed / 60);
+  const ss = Math.floor(elapsed % 60);
+  const hh = Math.round((elapsed * 100) % 100);
+  return (
+    <div className="font-mono text-5xl font-black tracking-widest tabular-nums text-cyan-300">
+      {String(mm).padStart(2, "0")}:{String(ss).padStart(2, "0")}.{String(hh).padStart(2, "0")}
+    </div>
+  );
+}
+
+export default function TimingConsolePage() {
+  const { data: meets } = useListMeets();
+  const [selectedMeet, setSelectedMeet] = useState("");
+  const [selectedEvent, setSelectedEvent] = useState("");
+  const [selectedHeat, setSelectedHeat] = useState<number | null>(null);
+  const [hwConfig, setHwConfig] = useState<HwConfig>(() => {
+    const stored = localStorage.getItem("timing_hw_config");
+    return stored ? JSON.parse(stored) : { mode: "manual", ip: "192.168.1.100", port: "5100" };
+  });
+  const [connected, setConnected] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [lanes, setLanes] = useState<LaneTime[]>(buildLanes(8));
+  const [committed, setCommitted] = useState(false);
+  const [tab, setTab] = useState("timing");
+
+  const { data: events } = useListEvents(selectedMeet ? parseInt(selectedMeet) : 0, {
+    query: { enabled: !!selectedMeet }
+  });
+  const { data: heatsData } = useListHeats(selectedEvent ? parseInt(selectedEvent) : 0, {
+    query: { enabled: !!selectedEvent }
+  });
+  const setResult = useSetResult();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+
+  const allHeats: number[] = heatsData
+    ? [...new Set(heatsData.map((h: any) => h.heat))].sort((a, b) => a - b)
+    : [];
+
+  const currentHeatLanes = selectedHeat !== null && heatsData
+    ? heatsData.filter((h: any) => h.heat === selectedHeat)
+    : [];
+
+  const eventLanes = (() => {
+    const evt = events?.find((e: any) => e.id === parseInt(selectedEvent));
+    return evt?.lanes || 8;
+  })();
+
+  useEffect(() => {
+    setLanes(buildLanes(eventLanes));
+    setElapsed(0);
+    setRunning(false);
+    setCommitted(false);
+    setStartedAt(null);
+  }, [selectedEvent, selectedHeat, eventLanes]);
+
+  useEffect(() => {
+    if (running) {
+      const start = startedAt ?? Date.now();
+      if (!startedAt) setStartedAt(start);
+      intervalRef.current = setInterval(() => {
+        setElapsed((Date.now() - start) / 1000);
+      }, 10);
+    } else {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    }
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [running]);
+
+  const touchLane = useCallback((laneNum: number) => {
+    if (!running) return;
+    const t = elapsed;
+    setLanes(prev => prev.map(l =>
+      l.lane === laneNum && !l.touched ? { ...l, time: t, touched: true } : l
+    ));
+  }, [running, elapsed]);
+
+  const toggleDQ = (laneNum: number) => {
+    setLanes(prev => prev.map(l => l.lane === laneNum ? { ...l, dq: !l.dq, ns: false } : l));
+  };
+  const toggleNS = (laneNum: number) => {
+    setLanes(prev => prev.map(l => l.lane === laneNum ? { ...l, ns: !l.ns, dq: false } : l));
+  };
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (tab !== "timing") return;
+      const num = parseInt(e.key);
+      if (num >= 1 && num <= 9) { touchLane(num); return; }
+      if (e.key === " ") {
+        e.preventDefault();
+        if (!running) { setRunning(true); setElapsed(0); setStartedAt(Date.now()); }
+        else setRunning(false);
+      }
+      if (e.key === "r" || e.key === "R") {
+        setRunning(false); setElapsed(0); setStartedAt(null);
+        setLanes(buildLanes(eventLanes));
+        setCommitted(false);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [tab, running, touchLane, eventLanes]);
+
+  function runSim() {
+    setRunning(true);
+    setElapsed(0);
+    const start = Date.now();
+    setStartedAt(start);
+    const baseTime = 25 + Math.random() * 40;
+    const spread = 2;
+    currentHeatLanes.forEach((h: any, i: number) => {
+      const delay = (baseTime + (Math.random() - 0.5) * spread) * 1000;
+      setTimeout(() => {
+        setElapsed((Date.now() - start) / 1000);
+        setLanes(prev => prev.map(l =>
+          l.lane === h.lane ? { ...l, time: delay / 1000, touched: true } : l
+        ));
+      }, delay);
+    });
+    const maxTime = (baseTime + spread + 0.5) * 1000;
+    setTimeout(() => setRunning(false), maxTime);
+  }
+
+  async function commitResults() {
+    if (!selectedEvent || selectedHeat === null) return;
+    const heatLanes = currentHeatLanes;
+    const timedLanes = lanes.filter(l => l.touched || l.ns);
+    const sorted = [...timedLanes].filter(l => l.time !== null).sort((a, b) => (a.time ?? 0) - (b.time ?? 0));
+
+    let success = 0;
+    for (const l of lanes) {
+      const heatEntry = heatLanes.find((h: any) => h.lane === l.lane);
+      if (!heatEntry?.entryId) continue;
+      const place = l.ns || l.dq ? null : (sorted.findIndex(s => s.lane === l.lane) + 1 || null);
+      try {
+        await setResult.mutateAsync({
+          entryId: heatEntry.entryId,
+          finishTime: (l.ns || l.dq) ? null : l.time,
+          place,
+          dq: l.dq,
+          dqCode: "",
+          ns: l.ns,
+          dnf: false,
+          splits: "",
+        });
+        success++;
+      } catch {}
+    }
+    queryClient.invalidateQueries({ queryKey: getListHeatsQueryKey(parseInt(selectedEvent)) });
+    setCommitted(true);
+    toast({ title: `Committed ${success} results`, description: `Heat ${selectedHeat} results saved.` });
+  }
+
+  function connectHardware() {
+    if (hwConfig.mode === "manual" || hwConfig.mode === "sim") { setConnected(true); return; }
+    try {
+      const ws = new WebSocket(`ws://${hwConfig.ip}:${hwConfig.port}`);
+      ws.onopen = () => { setConnected(true); toast({ title: "Hardware connected", description: `${MODE_LABELS[hwConfig.mode]}` }); };
+      ws.onerror = () => { setConnected(false); toast({ title: "Connection failed", description: "Check IP/port and hardware.", variant: "destructive" }); };
+      ws.onmessage = (evt) => {
+        try {
+          const data = JSON.parse(evt.data);
+          if (data.type === "touch" && data.lane) touchLane(data.lane);
+          if (data.type === "start") { setRunning(true); setStartedAt(Date.now()); }
+        } catch {}
+      };
+      ws.onclose = () => setConnected(false);
+      wsRef.current = ws;
+    } catch {
+      toast({ title: "Connection failed", variant: "destructive" });
+    }
+  }
+
+  function disconnect() {
+    wsRef.current?.close();
+    setConnected(false);
+  }
+
+  function saveConfig() {
+    localStorage.setItem("timing_hw_config", JSON.stringify(hwConfig));
+    toast({ title: "Config saved" });
+  }
+
+  const currentEvent = events?.find((e: any) => e.id === parseInt(selectedEvent));
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Timing Console</h1>
+          <p className="text-muted-foreground text-sm">Live heat timing — manual or hardware interface</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {connected
+            ? <Badge className="bg-green-500/20 text-green-400 border-green-500/30"><Wifi className="h-3 w-3 mr-1" />Connected</Badge>
+            : <Badge variant="outline" className="text-slate-400"><WifiOff className="h-3 w-3 mr-1" />Disconnected</Badge>}
+          <Badge variant="outline">{MODE_LABELS[hwConfig.mode].split(" ")[0]}</Badge>
+        </div>
+      </div>
+
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          <TabsTrigger value="timing"><Timer className="h-4 w-4 mr-1" />Timing</TabsTrigger>
+          <TabsTrigger value="settings"><Settings className="h-4 w-4 mr-1" />Hardware Config</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="timing" className="space-y-4 mt-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <Label className="text-xs mb-1 block">Meet</Label>
+              <Select value={selectedMeet} onValueChange={v => { setSelectedMeet(v); setSelectedEvent(""); setSelectedHeat(null); }}>
+                <SelectTrigger><SelectValue placeholder="Select meet..." /></SelectTrigger>
+                <SelectContent>{meets?.map((m: any) => <SelectItem key={m.id} value={String(m.id)}>{m.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">Event</Label>
+              <Select value={selectedEvent} onValueChange={v => { setSelectedEvent(v); setSelectedHeat(null); }} disabled={!selectedMeet}>
+                <SelectTrigger><SelectValue placeholder="Select event..." /></SelectTrigger>
+                <SelectContent>{events?.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>#{e.eventNumber} — {e.distance}{e.stroke} {e.gender}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">Heat</Label>
+              <Select value={selectedHeat !== null ? String(selectedHeat) : ""} onValueChange={v => setSelectedHeat(parseInt(v))} disabled={!selectedEvent}>
+                <SelectTrigger><SelectValue placeholder="Select heat..." /></SelectTrigger>
+                <SelectContent>{allHeats.map(h => <SelectItem key={h} value={String(h)}>Heat {h}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {selectedHeat !== null && (
+            <div className="space-y-4">
+              <Card className="bg-slate-950 border-slate-800">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <div className="text-slate-400 text-sm mb-1">
+                        {currentEvent ? `Event #${currentEvent.eventNumber} — ${currentEvent.distance}${currentEvent.stroke} ${currentEvent.gender}` : "—"}
+                      </div>
+                      <div className="text-white font-bold text-lg">Heat {selectedHeat}</div>
+                    </div>
+                    <ElapsedClock running={running} elapsed={elapsed} />
+                  </div>
+
+                  <div className="flex items-center gap-3 mb-6">
+                    {!running ? (
+                      <Button onClick={() => { setRunning(true); setElapsed(0); setStartedAt(Date.now()); setLanes(buildLanes(eventLanes)); setCommitted(false); }}
+                        className="bg-green-600 hover:bg-green-700 text-white font-bold px-6">
+                        <Play className="h-4 w-4 mr-2" /> START
+                      </Button>
+                    ) : (
+                      <Button onClick={() => setRunning(false)} variant="destructive" className="font-bold px-6">
+                        <Square className="h-4 w-4 mr-2" /> STOP
+                      </Button>
+                    )}
+                    <Button variant="outline" onClick={() => { setRunning(false); setElapsed(0); setStartedAt(null); setLanes(buildLanes(eventLanes)); setCommitted(false); }}
+                      className="border-slate-700 text-slate-300">
+                      <RotateCcw className="h-4 w-4 mr-1" /> Reset
+                    </Button>
+                    {hwConfig.mode === "sim" && (
+                      <Button variant="outline" onClick={runSim} className="border-purple-700 text-purple-300">
+                        <Zap className="h-4 w-4 mr-1" /> Simulate Heat
+                      </Button>
+                    )}
+                    <div className="ml-auto flex items-center gap-2 text-xs text-slate-500">
+                      <Keyboard className="h-3 w-3" />
+                      Keys: 1-8 = touch lane · Space = start/stop · R = reset
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2">
+                    {lanes.map(l => {
+                      const heatEntry = currentHeatLanes.find((h: any) => h.lane === l.lane);
+                      const athlete = heatEntry ? `${heatEntry.firstName} ${heatEntry.lastName}` : "—";
+                      const seedTime = heatEntry?.seedTime ? formatTime(heatEntry.seedTime) : "NT";
+                      return (
+                        <div key={l.lane} className={cn(
+                          "flex items-center gap-3 rounded-lg px-4 py-3 border transition-all",
+                          l.touched && !l.dq && !l.ns ? "bg-green-950/40 border-green-800" :
+                          l.dq ? "bg-red-950/40 border-red-800" :
+                          l.ns ? "bg-slate-800/60 border-slate-700" :
+                          running ? "bg-slate-900 border-slate-700 hover:border-cyan-700 cursor-pointer" :
+                          "bg-slate-900/60 border-slate-800"
+                        )}
+                        onClick={() => !l.touched && touchLane(l.lane)}
+                        >
+                          <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center text-cyan-400 font-black text-lg flex-shrink-0">
+                            {l.lane}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-sm text-white truncate">{athlete}</div>
+                            <div className="text-xs text-slate-500">Seed: {seedTime} {heatEntry?.teamName ? `· ${heatEntry.teamName}` : ""}</div>
+                          </div>
+                          <div className="font-mono text-xl font-bold min-w-[100px] text-right">
+                            {l.ns ? <span className="text-slate-500 text-base">NS</span> :
+                             l.dq ? <span className="text-red-400 text-base">DQ</span> :
+                             l.time ? <span className="text-cyan-300">{formatTime(l.time)}</span> :
+                             <span className="text-slate-600">—:——.——</span>}
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {running && !l.touched && (
+                              <Button size="sm" onClick={(e) => { e.stopPropagation(); touchLane(l.lane); }}
+                                className="bg-cyan-600 hover:bg-cyan-500 text-white text-xs h-8 px-3 font-bold">
+                                TOUCH
+                              </Button>
+                            )}
+                            <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); toggleDQ(l.lane); }}
+                              className={cn("h-8 px-2 text-xs", l.dq ? "bg-red-900 border-red-700 text-red-300" : "border-slate-700 text-slate-400")}>
+                              DQ
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); toggleNS(l.lane); }}
+                              className={cn("h-8 px-2 text-xs", l.ns ? "bg-slate-700 border-slate-600 text-slate-200" : "border-slate-700 text-slate-400")}>
+                              NS
+                            </Button>
+                            {l.touched && !l.dq && !l.ns && (
+                              <CheckCircle2 className="h-5 w-5 text-green-400" />
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between">
+                    <div className="text-xs text-slate-500">
+                      {lanes.filter(l => l.touched).length} / {eventLanes} lanes touched
+                    </div>
+                    <Button onClick={commitResults}
+                      disabled={committed || lanes.every(l => !l.touched && !l.ns)}
+                      className={cn("font-bold px-8", committed ? "bg-green-700" : "bg-blue-600 hover:bg-blue-500")}>
+                      {committed ? <><CheckCircle2 className="h-4 w-4 mr-2" /> Committed</> : "Commit Results →"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm">DQ Code Reference (USA Swimming)</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {DQ_CODES.map(d => (
+                      <div key={d.code} className="flex items-start gap-2 text-xs">
+                        <span className="font-mono font-bold text-red-400 flex-shrink-0">{d.code}</span>
+                        <span className="text-muted-foreground">{d.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {!selectedHeat && (
+            <Card className="border-dashed">
+              <CardContent className="py-16 text-center text-muted-foreground">
+                <Timer className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                <p>Select a meet, event, and heat above to begin timing.</p>
+                <p className="text-xs mt-2">Use keyboard keys 1–8 to touch lanes, Space to start/stop.</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="settings" className="space-y-4 mt-4">
+          <Card>
+            <CardHeader><CardTitle className="flex items-center gap-2"><Radio className="h-5 w-5" />Hardware Interface Configuration</CardTitle></CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <Label>Timing System Mode</Label>
+                <Select value={hwConfig.mode} onValueChange={v => setHwConfig(c => ({ ...c, mode: v as HardwareMode }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(MODE_LABELS) as HardwareMode[]).map(k => (
+                      <SelectItem key={k} value={k}>{MODE_LABELS[k]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {(hwConfig.mode === "cts" || hwConfig.mode === "daktronics" || hwConfig.mode === "omega") && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>IP Address</Label>
+                      <Input value={hwConfig.ip} onChange={e => setHwConfig(c => ({ ...c, ip: e.target.value }))} placeholder="192.168.1.100" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Port</Label>
+                      <Input value={hwConfig.port} onChange={e => setHwConfig(c => ({ ...c, port: e.target.value }))} placeholder="5100" />
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-muted/50 p-4 text-sm text-muted-foreground space-y-1">
+                    {hwConfig.mode === "cts" && <>
+                      <p className="font-semibold text-foreground">Colorado Timing Systems — CTS Dolphin</p>
+                      <p>Default port: 5100. Enable "Network Mode" in CTS Dolphin settings. Ensure firewall allows TCP on the configured port.</p>
+                    </>}
+                    {hwConfig.mode === "daktronics" && <>
+                      <p className="font-semibold text-foreground">Daktronics OmniSport 6000</p>
+                      <p>Default port: 5100. Enable "External Control" in OmniSport. The scoreboard output will auto-sync with results.</p>
+                    </>}
+                    {hwConfig.mode === "omega" && <>
+                      <p className="font-semibold text-foreground">Omega ARES 21</p>
+                      <p>Default port: 5100. Configure ARES 21 "External Data Output" to this machine's IP. Touch pads connect via the ARES hardware.</p>
+                    </>}
+                  </div>
+                  <div className="flex gap-3">
+                    {!connected ? (
+                      <Button onClick={connectHardware} className="bg-green-600 hover:bg-green-700">
+                        <Wifi className="h-4 w-4 mr-2" /> Connect
+                      </Button>
+                    ) : (
+                      <Button onClick={disconnect} variant="destructive">
+                        <WifiOff className="h-4 w-4 mr-2" /> Disconnect
+                      </Button>
+                    )}
+                    <Button variant="outline" onClick={saveConfig}>Save Config</Button>
+                  </div>
+                </>
+              )}
+
+              {hwConfig.mode === "manual" && (
+                <div className="rounded-lg bg-muted/50 p-4 space-y-2 text-sm">
+                  <p className="font-semibold">Manual Mode — Keyboard Shortcuts</p>
+                  <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-muted-foreground">
+                    <span><kbd className="px-1.5 py-0.5 rounded bg-muted font-mono text-xs">1–8</kbd> Touch lane 1–8</span>
+                    <span><kbd className="px-1.5 py-0.5 rounded bg-muted font-mono text-xs">Space</kbd> Start / Stop clock</span>
+                    <span><kbd className="px-1.5 py-0.5 rounded bg-muted font-mono text-xs">R</kbd> Reset heat</span>
+                    <span>Click lane row to touch that lane</span>
+                  </div>
+                  <Button onClick={() => { setConnected(true); saveConfig(); }} className="mt-2">Activate Manual Mode</Button>
+                </div>
+              )}
+
+              {hwConfig.mode === "sim" && (
+                <div className="rounded-lg bg-purple-950/30 border border-purple-800/40 p-4 text-sm">
+                  <p className="font-semibold text-purple-300">Simulation Mode</p>
+                  <p className="text-muted-foreground mt-1">Auto-generates realistic swim times for all seeded lanes. Use for testing and demonstrations. Click "Simulate Heat" in the Timing tab.</p>
+                  <Button onClick={() => { setConnected(true); saveConfig(); }} className="mt-3 bg-purple-700 hover:bg-purple-600">Activate Simulation</Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle className="text-sm">Scoreboard Output</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Scoreboard IP</Label>
+                  <Input placeholder="192.168.1.50" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Protocol</Label>
+                  <Select defaultValue="daktronics">
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="daktronics">Daktronics OmniSport</SelectItem>
+                      <SelectItem value="cts">CTS Scoreboard</SelectItem>
+                      <SelectItem value="generic">Generic ASCII</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">Results committed in the timing tab will be broadcast to the configured scoreboard address in real time.</p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
