@@ -10,3 +10,7 @@ export * from "./relays";
 export * from "./timestandards";
 export * from "./workouts";
 export * from "./billing";
+export * from "./officials";
+export * from "./records";
+export * from "./groups";
+export * from "./attendance";
