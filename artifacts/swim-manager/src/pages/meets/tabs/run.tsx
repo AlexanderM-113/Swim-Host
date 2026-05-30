@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useListEvents, useListHeats, useSetResult, getListHeatsQueryKey } from "@/lib/local-store";
+import { useListEvents, useListHeats, useSetResult, getListHeatsQueryKey, readStore, useGetSettings } from "@/lib/local-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -9,10 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 import { formatTime, parseTime } from "@/lib/format-time";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { CheckCircle, Edit2, AlertTriangle } from "lucide-react";
+import { CheckCircle, Edit2, AlertTriangle, Wifi, WifiOff, Send, Loader2 } from "lucide-react";
 
 interface ResultForm {
   finishTime: string;
@@ -26,27 +27,37 @@ interface ResultForm {
 
 const DQ_CODES = [
   { code: "1A", label: "False Start" },
-  { code: "2A", label: "Stroke Infraction - Freestyle" },
-  { code: "2B", label: "Stroke Infraction - Backstroke" },
-  { code: "2C", label: "Stroke Infraction - Breaststroke" },
-  { code: "2D", label: "Stroke Infraction - Butterfly" },
+  { code: "2A", label: "Stroke Infraction — Freestyle" },
+  { code: "2B", label: "Stroke Infraction — Backstroke" },
+  { code: "2C", label: "Stroke Infraction — Breaststroke" },
+  { code: "2D", label: "Stroke Infraction — Butterfly" },
   { code: "3A", label: "No Touch / Illegal Touch" },
+  { code: "3B", label: "Early Turn" },
   { code: "4A", label: "Unsportsmanlike Conduct" },
+  { code: "4B", label: "Delay of Meet" },
   { code: "5A", label: "Unspecified / Other" },
 ];
 
+function fmtTime(secs: number | null | undefined) {
+  if (!secs) return "NT";
+  return formatTime(secs);
+}
+
 export default function MeetRun({ meetId }: { meetId: number }) {
   const { data: events } = useListEvents(meetId);
+  const { data: settings } = useGetSettings();
   const [selectedEvent, setSelectedEvent] = useState<string>("");
   const [editLane, setEditLane] = useState<any | null>(null);
   const [editHeat, setEditHeat] = useState<number | null>(null);
   const [form, setForm] = useState<ResultForm>({
     finishTime: "", place: "", dq: false, dqCode: "", ns: false, dnf: false, splits: ""
   });
+  const [pushing, setPushing] = useState(false);
+  const [lastPush, setLastPush] = useState<string | null>(null);
 
   const { data: heats, isLoading, refetch } = useListHeats(
     selectedEvent ? parseInt(selectedEvent, 10) : 0,
-    { query: { enabled: !!selectedEvent, queryKey: getListHeatsQueryKey(parseInt(selectedEvent, 10)) } }
+    { query: { enabled: !!selectedEvent, queryKey: getListHeatsQueryKey(parseInt(selectedEvent || "0", 10)) } }
   );
 
   const setResult = useSetResult();
@@ -71,7 +82,6 @@ export default function MeetRun({ meetId }: { meetId: number }) {
     if (!editLane?.entryId) return;
     const finishTimeSec = form.dq || form.ns || form.dnf ? null : parseTime(form.finishTime);
     const place = form.dq || form.ns || form.dnf ? null : (parseInt(form.place) || null);
-
     setResult.mutate(
       {
         eventId: parseInt(selectedEvent),
@@ -99,6 +109,66 @@ export default function MeetRun({ meetId }: { meetId: number }) {
     );
   }
 
+  async function pushLiveResults() {
+    const apiUrl = settings?.backupUrl?.replace(/\/$/, "");
+    if (!apiUrl) {
+      toast({
+        title: "No API server configured",
+        description: "Set a backup/API server URL in Settings first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setPushing(true);
+    try {
+      const store = readStore();
+      const meetEvents = store.events.filter((e) => e.meetId === meetId);
+      const liveEvents = meetEvents.map((event) => {
+        const eventEntries = store.entries.filter((e) => e.eventId === event.id && !e.scratched);
+        const results = eventEntries.map((entry) => {
+          const result = store.results.find((r) => r.entryId === entry.id);
+          const athlete = store.athletes.find((a) => a.id === entry.athleteId);
+          const team = athlete?.teamId ? store.teams.find((t) => t.id === athlete.teamId) : null;
+          return {
+            athleteName: athlete ? `${athlete.firstName} ${athlete.lastName}` : "Unknown",
+            teamAbbreviation: team?.abbreviation ?? "UNAT",
+            seedTime: entry.seedTime ? formatTime(entry.seedTime) : "NT",
+            finishTime: result?.finishTime ? formatTime(result.finishTime) : null,
+            place: result?.place ?? null,
+            points: result?.points ?? null,
+            dq: result?.dq ?? false,
+            ns: result?.ns ?? false,
+            dnf: result?.dnf ?? false,
+          };
+        }).filter((r) => r.finishTime || r.dq || r.ns || r.dnf)
+          .sort((a, b) => (a.place ?? 999) - (b.place ?? 999));
+
+        return {
+          eventNumber: event.eventNumber,
+          description: `${event.gender === "F" ? "Women" : "Men"} ${event.ageGroup || "Open"} ${event.distance} ${event.stroke}`,
+          status: event.status,
+          results,
+        };
+      });
+
+      const resp = await fetch(`${apiUrl}/api/live/${meetId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ events: liveEvents }),
+      });
+
+      if (!resp.ok) throw new Error(`Server responded ${resp.status}`);
+      const data = await resp.json();
+      setLastPush(new Date().toLocaleTimeString());
+      toast({ title: "Results pushed live", description: `Updated at ${new Date().toLocaleTimeString()}` });
+    } catch (e: any) {
+      toast({ title: "Push failed", description: e?.message, variant: "destructive" });
+    } finally {
+      setPushing(false);
+    }
+  }
+
   function getStatusBadge(lane: any) {
     if (lane.dq) return <Badge className="bg-red-600 text-white text-[10px]">DQ</Badge>;
     if (lane.ns) return <Badge className="bg-slate-500 text-white text-[10px]">NS</Badge>;
@@ -107,105 +177,161 @@ export default function MeetRun({ meetId }: { meetId: number }) {
     return null;
   }
 
-  const totalEntries = heats?.reduce((sum: number, h: any) => sum + (h.lanes?.length ?? 0), 0) ?? 0;
+  const totalEntries = heats?.reduce((sum: number, h: any) => sum + (h.lanes?.filter((l: any) => l.athleteId).length ?? 0), 0) ?? 0;
   const completedEntries = heats?.reduce((sum: number, h: any) =>
     sum + (h.lanes?.filter((l: any) => l.finishTime || l.dq || l.ns || l.dnf).length ?? 0), 0) ?? 0;
+  const progress = totalEntries > 0 ? Math.round((completedEntries / totalEntries) * 100) : 0;
+
+  const availableEvents = events?.filter((e) => e.status === "seeded" || e.status === "completed") ?? [];
 
   return (
     <>
       <div className="space-y-4">
+        {/* Header card */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>Live Meet Running</CardTitle>
-              {selectedEvent && totalEntries > 0 && (
-                <p className="text-sm text-muted-foreground mt-1">
-                  {completedEntries}/{totalEntries} results entered
-                </p>
-              )}
-            </div>
-            <div className="w-[320px]">
-              <Select value={selectedEvent} onValueChange={setSelectedEvent}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Event to Run" />
-                </SelectTrigger>
-                <SelectContent>
-                  {events?.filter((e) => e.status === "seeded" || e.status === "completed").map((event) => (
-                    <SelectItem key={event.id} value={event.id.toString()}>
-                      Event {event.eventNumber}: {event.gender} {event.distance} {event.stroke}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <CardHeader>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex-1">
+                <CardTitle>Live Meet Running</CardTitle>
+                {selectedEvent && totalEntries > 0 && (
+                  <div className="mt-2 space-y-1">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{completedEntries}/{totalEntries} results entered</span>
+                      <span>{progress}%</span>
+                    </div>
+                    <Progress value={progress} className="h-1.5" />
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={pushLiveResults}
+                  disabled={pushing}
+                  className={lastPush ? "border-green-500 text-green-700 hover:text-green-700" : ""}
+                >
+                  {pushing ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : lastPush ? (
+                    <Wifi className="h-4 w-4 mr-2" />
+                  ) : (
+                    <Send className="h-4 w-4 mr-2" />
+                  )}
+                  {pushing ? "Pushing…" : lastPush ? `Pushed ${lastPush}` : "Push Live Results"}
+                </Button>
+                <div className="w-72">
+                  <Select value={selectedEvent} onValueChange={setSelectedEvent}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Event to Run" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableEvents.map((event) => (
+                        <SelectItem key={event.id} value={event.id.toString()}>
+                          Evt {event.eventNumber}: {event.gender === "F" ? "Women" : "Men"} {event.distance} {event.stroke}
+                          {event.status === "completed" && " ✓"}
+                        </SelectItem>
+                      ))}
+                      {availableEvents.length === 0 && (
+                        <SelectItem value="__none" disabled>No seeded events yet</SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
           </CardHeader>
         </Card>
 
+        {!selectedEvent && (
+          <Card>
+            <CardContent className="py-8 text-center text-muted-foreground">
+              Select an event above to enter results. Events must be seeded first.
+            </CardContent>
+          </Card>
+        )}
+
         {selectedEvent && (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {isLoading ? (
               <div className="text-center py-8 text-muted-foreground">Loading heats…</div>
-            ) : heats?.map((heat: any) => (
-              <Card key={heat.id}>
-                <CardHeader className="flex flex-row items-center justify-between py-3">
-                  <CardTitle className="text-base">Heat {heat.heatNumber}</CardTitle>
-                  <div className="text-xs text-muted-foreground">
-                    {heat.lanes?.filter((l: any) => l.finishTime || l.dq || l.ns || l.dnf).length ?? 0}
-                    /{heat.lanes?.length ?? 0} results
-                  </div>
-                </CardHeader>
-                <CardContent className="p-0 pb-2">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-14 pl-4">Lane</TableHead>
-                        <TableHead>Athlete</TableHead>
-                        <TableHead>Team</TableHead>
-                        <TableHead className="font-mono">Seed</TableHead>
-                        <TableHead className="font-mono">Result</TableHead>
-                        <TableHead className="w-14 text-center">Place</TableHead>
-                        <TableHead className="w-24 text-right pr-4">Action</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {heat.lanes?.map((lane: any) => (
-                        <TableRow key={lane.lane} className={lane.finishTime || lane.dq || lane.ns || lane.dnf ? "bg-muted/30" : ""}>
-                          <TableCell className="pl-4 font-bold text-primary">{lane.lane}</TableCell>
-                          <TableCell className={lane.athleteId ? "font-medium" : "text-muted-foreground italic"}>
-                            <div className="flex items-center gap-2">
-                              {lane.athleteName || "Empty"}
-                              {getStatusBadge(lane)}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{lane.teamName || "—"}</TableCell>
-                          <TableCell className="font-mono text-sm">{lane.seedTime ? formatTime(lane.seedTime) : "NT"}</TableCell>
-                          <TableCell className="font-mono font-bold">
-                            {lane.dq ? <span className="text-red-600">DQ {lane.dqCode ? `(${lane.dqCode})` : ""}</span>
-                              : lane.ns ? <span className="text-slate-500">NS</span>
-                              : lane.dnf ? <span className="text-orange-600">DNF</span>
-                              : lane.finishTime ? <span className="text-green-700 dark:text-green-400">{formatTime(lane.finishTime)}</span>
-                              : <span className="text-muted-foreground/30">—</span>}
-                          </TableCell>
-                          <TableCell className="text-center font-black text-lg">
-                            {!lane.dq && !lane.ns && !lane.dnf && lane.place ? lane.place : ""}
-                          </TableCell>
-                          <TableCell className="text-right pr-4">
-                            {lane.athleteId && (
-                              <Button size="sm" variant={lane.finishTime || lane.dq || lane.ns || lane.dnf ? "outline" : "default"}
-                                onClick={() => openEdit(lane, heat.heatNumber)}>
-                                {lane.finishTime || lane.dq || lane.ns || lane.dnf
-                                  ? <><Edit2 className="h-3 w-3 mr-1" />Edit</>
-                                  : <><CheckCircle className="h-3 w-3 mr-1" />Enter</>}
-                              </Button>
-                            )}
-                          </TableCell>
+            ) : heats?.map((heat: any) => {
+              const heatComplete = heat.lanes?.filter((l: any) => l.athleteId).every(
+                (l: any) => l.finishTime || l.dq || l.ns || l.dnf
+              );
+              return (
+                <Card key={heat.id} className={heatComplete ? "border-green-200 bg-green-50/30 dark:border-green-900 dark:bg-green-900/10" : ""}>
+                  <CardHeader className="flex flex-row items-center justify-between py-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      Heat {heat.heatNumber}
+                      {heatComplete && <CheckCircle className="h-4 w-4 text-green-600" />}
+                    </CardTitle>
+                    <div className="text-xs text-muted-foreground">
+                      {heat.lanes?.filter((l: any) => l.finishTime || l.dq || l.ns || l.dnf).length ?? 0}
+                      /{heat.lanes?.filter((l: any) => l.athleteId).length ?? 0} results
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-0 pb-2">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-14 pl-4">Lane</TableHead>
+                          <TableHead>Athlete</TableHead>
+                          <TableHead>Team</TableHead>
+                          <TableHead className="font-mono">Seed</TableHead>
+                          <TableHead className="font-mono">Result</TableHead>
+                          <TableHead className="w-14 text-center">Place</TableHead>
+                          <TableHead className="w-24 text-right pr-4">Action</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            ))}
+                      </TableHeader>
+                      <TableBody>
+                        {heat.lanes?.map((lane: any) => (
+                          <TableRow
+                            key={lane.laneNumber ?? lane.lane}
+                            className={lane.finishTime || lane.dq || lane.ns || lane.dnf ? "bg-muted/30" : ""}
+                          >
+                            <TableCell className="pl-4 font-bold text-primary text-lg">
+                              {lane.laneNumber ?? lane.lane}
+                            </TableCell>
+                            <TableCell className={lane.athleteId ? "font-medium" : "text-muted-foreground italic"}>
+                              <div className="flex items-center gap-2">
+                                {lane.athleteName || "Empty"}
+                                {getStatusBadge(lane)}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">{lane.teamName || "—"}</TableCell>
+                            <TableCell className="font-mono text-sm">{fmtTime(lane.seedTime)}</TableCell>
+                            <TableCell className="font-mono font-bold">
+                              {lane.dq ? <span className="text-red-600">DQ {lane.dqCode ? `(${lane.dqCode})` : ""}</span>
+                                : lane.ns ? <span className="text-slate-500">NS</span>
+                                : lane.dnf ? <span className="text-orange-600">DNF</span>
+                                : lane.finishTime ? <span className="text-green-700 dark:text-green-400">{formatTime(lane.finishTime)}</span>
+                                : <span className="text-muted-foreground/30">—</span>}
+                            </TableCell>
+                            <TableCell className="text-center font-black text-xl">
+                              {!lane.dq && !lane.ns && !lane.dnf && lane.place ? lane.place : ""}
+                            </TableCell>
+                            <TableCell className="text-right pr-4">
+                              {lane.athleteId && (
+                                <Button
+                                  size="sm"
+                                  variant={lane.finishTime || lane.dq || lane.ns || lane.dnf ? "outline" : "default"}
+                                  onClick={() => openEdit(lane, heat.heatNumber)}
+                                >
+                                  {lane.finishTime || lane.dq || lane.ns || lane.dnf
+                                    ? <><Edit2 className="h-3 w-3 mr-1" />Edit</>
+                                    : <><CheckCircle className="h-3 w-3 mr-1" />Enter</>}
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              );
+            })}
             {(!heats || heats.length === 0) && (
               <Card>
                 <CardContent className="py-8 text-center text-muted-foreground">
@@ -221,17 +347,19 @@ export default function MeetRun({ meetId }: { meetId: number }) {
       <Dialog open={!!editLane} onOpenChange={(open) => { if (!open) setEditLane(null); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Enter Result</DialogTitle>
+            <DialogTitle>
+              {editLane?.finishTime || editLane?.dq || editLane?.ns || editLane?.dnf ? "Edit Result" : "Enter Result"}
+            </DialogTitle>
           </DialogHeader>
           {editLane && (
-            <div className="space-y-1 text-sm text-muted-foreground">
+            <div className="text-sm text-muted-foreground">
               <span className="font-semibold text-foreground">{editLane.athleteName}</span>
               {" · "}{editLane.teamName}
-              {" · "}Lane {editLane.lane}, Heat {editHeat}
+              {" · "}Lane {editLane.laneNumber ?? editLane.lane}, Heat {editHeat}
+              {editLane.seedTime && <span className="ml-2 font-mono text-xs">Seed: {fmtTime(editLane.seedTime)}</span>}
             </div>
           )}
           <div className="space-y-4 py-2">
-            {/* Status flags */}
             <div className="flex gap-6">
               <div className="flex items-center gap-2">
                 <Checkbox id="dq" checked={form.dq}
@@ -274,16 +402,14 @@ export default function MeetRun({ meetId }: { meetId: number }) {
                       value={form.finishTime}
                       onChange={(e) => setForm((f) => ({ ...f, finishTime: e.target.value }))}
                       className="font-mono"
+                      autoFocus
                     />
                     <p className="text-xs text-muted-foreground">MM:SS.hh or SS.hh</p>
                   </div>
                   <div className="space-y-1.5">
                     <Label>Place</Label>
                     <Input
-                      type="number"
-                      min={1}
-                      max={100}
-                      placeholder="1"
+                      type="number" min={1} max={100} placeholder="1"
                       value={form.place}
                       onChange={(e) => setForm((f) => ({ ...f, place: e.target.value }))}
                     />

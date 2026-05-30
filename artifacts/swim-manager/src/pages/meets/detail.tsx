@@ -33,7 +33,7 @@ export default function MeetDetail() {
   const currentTab = params?.["*"] || "";
 
   const tabItems = [
-    { label: "Overview", value: "", href: `/meets/${meetId}` },
+    { label: "Sessions", value: "", href: `/meets/${meetId}` },
     { label: "Events", value: "events", href: `/meets/${meetId}/events` },
     { label: "Athletes & Entries", value: "athletes", href: `/meets/${meetId}/athletes` },
     { label: "Relays", value: "relays", href: `/meets/${meetId}/relays` },
