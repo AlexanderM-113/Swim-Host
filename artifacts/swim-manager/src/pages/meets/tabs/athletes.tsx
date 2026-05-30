@@ -56,11 +56,10 @@ export default function MeetAthletes({ meetId }: { meetId: number }) {
         data: {
           eventId: parseInt(selectedEvent),
           athleteId: parseInt(newAthleteId),
-          teamId: athlete?.teamId ?? null,
-          seedTime: seedTimeSec ?? null,
+          seedTime: seedTimeSec ?? undefined,
           seedCourse: newSeedCourse,
           scratched: false,
-        },
+        } as any,
       },
       {
         onSuccess: () => {
@@ -80,7 +79,7 @@ export default function MeetAthletes({ meetId }: { meetId: number }) {
   function handleScratch() {
     if (!scratchEntry) return;
     updateEntry.mutate(
-      { id: scratchEntry.id, data: { scratched: true, scratchedReason: scratchReason } },
+      { id: scratchEntry.id, data: { scratched: true } },
       {
         onSuccess: () => {
           toast({ title: "Entry scratched" });
@@ -96,7 +95,7 @@ export default function MeetAthletes({ meetId }: { meetId: number }) {
 
   function handleUnscratch(entry: any) {
     updateEntry.mutate(
-      { id: entry.id, data: { scratched: false, scratchedReason: null } },
+      { id: entry.id, data: { scratched: false } },
       {
         onSuccess: () => { toast({ title: "Scratch removed" }); invalidate(); },
         onError: () => toast({ title: "Failed to remove scratch", variant: "destructive" }),
@@ -184,7 +183,7 @@ export default function MeetAthletes({ meetId }: { meetId: number }) {
                     <TableCell className="text-sm text-muted-foreground">{entry.teamName || "Unattached"}</TableCell>
                     <TableCell className="font-mono">{entry.seedTime ? formatTime(entry.seedTime) : "NT"}</TableCell>
                     <TableCell className="text-sm">{entry.seedCourse || "—"}</TableCell>
-                    <TableCell className="text-center">{entry.heatNumber || "—"}</TableCell>
+                    <TableCell className="text-center">{entry.heat || "—"}</TableCell>
                     <TableCell className="text-center">{entry.lane || "—"}</TableCell>
                     <TableCell>
                       {entry.scratched

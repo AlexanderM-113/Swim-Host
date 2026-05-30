@@ -5,6 +5,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { startAutoBackup } from "@/lib/backup-service";
 import { Layout } from "@/components/layout";
+import { ModuleProvider } from "@/contexts/module-context";
+import { LaunchModal } from "@/components/launch-modal";
 import NotFound from "@/pages/not-found";
 
 import Dashboard from "@/pages/dashboard";
@@ -27,6 +29,9 @@ import WebGen from "@/pages/webgen";
 import Settings from "@/pages/settings";
 import Scoreboard from "@/pages/scoreboard";
 import SDIFPage from "@/pages/sdif";
+import TimingConsole from "@/pages/timing";
+import RecordsPage from "@/pages/records";
+import GroupsPage from "@/pages/groups";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -40,6 +45,7 @@ const queryClient = new QueryClient({
 function Router() {
   return (
     <Layout>
+      <LaunchModal />
       <Switch>
         <Route path="/" component={Dashboard} />
 
@@ -69,6 +75,10 @@ function Router() {
         <Route path="/settings" component={Settings} />
         <Route path="/scoreboard" component={Scoreboard} />
 
+        <Route path="/timing" component={TimingConsole} />
+        <Route path="/records" component={RecordsPage} />
+        <Route path="/groups" component={GroupsPage} />
+
         <Route component={NotFound} />
       </Switch>
     </Layout>
@@ -83,9 +93,11 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
-        </WouterRouter>
+        <ModuleProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <Router />
+          </WouterRouter>
+        </ModuleProvider>
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>

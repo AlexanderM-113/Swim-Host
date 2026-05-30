@@ -741,7 +741,7 @@ export function useSeedEvent() {
       const event = store.events.find((e) => e.id === eventId);
       if (!event) throw new Error("Event not found");
 
-      const numLanes = data.lanes ?? event.lanes ?? 8;
+      const numLanes = data.lanes ?? (event as any).lanes ?? 8;
       const slowToFast = (data.order ?? "slow_to_fast") === "slow_to_fast";
       const useCircle = data.circleSeeding !== false;
 

@@ -56,14 +56,14 @@ export default function Workouts() {
               <TableRow key={workout.id}>
                 <TableCell className="font-medium">
                   <Link href={`/workouts/${workout.id}`} className="text-primary hover:underline">
-                    {workout.title}
+                    {(workout as any).title || workout.name}
                   </Link>
                 </TableCell>
                 <TableCell>
                   {workout.date ? format(new Date(workout.date), "MMM d, yyyy") : "-"}
                 </TableCell>
-                <TableCell>{workout.teamName || "General"}</TableCell>
-                <TableCell className="font-mono">{workout.totalDistance || 0} {workout.course}</TableCell>
+                <TableCell>{(workout as any).teamName || "General"}</TableCell>
+                <TableCell className="font-mono">{(workout as any).totalDistance || (workout as any).distance || 0} {(workout as any).course}</TableCell>
               </TableRow>
             ))}
             {(!workouts || workouts.length === 0) && (

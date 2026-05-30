@@ -26,11 +26,11 @@ export default function MeetTeamScores({ meetId }: { meetId: number }) {
           <TableBody>
             {scores?.map(score => (
               <TableRow key={score.teamId}>
-                <TableCell className="font-bold">{score.place}</TableCell>
+                <TableCell className="font-bold">{(score as any).place ?? (scores?.indexOf(score) ?? 0) + 1}</TableCell>
                 <TableCell className="font-medium">
-                  {score.teamName} <span className="text-muted-foreground ml-2 text-sm">({score.teamAbbreviation})</span>
+                  {score.teamName} {(score as any).teamAbbreviation && <span className="text-muted-foreground ml-2 text-sm">({(score as any).teamAbbreviation})</span>}
                 </TableCell>
-                <TableCell className="text-right font-mono font-bold text-lg text-primary">{score.points}</TableCell>
+                <TableCell className="text-right font-mono font-bold text-lg text-primary">{(score as any).points ?? score.score}</TableCell>
               </TableRow>
             ))}
             {(!scores || scores.length === 0) && (

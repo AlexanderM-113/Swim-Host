@@ -633,7 +633,7 @@ function DownloadAppTab() {
   async function handleDownloadApp() {
     setDownloading(true);
     try {
-      const r = await fetch(`${BASE}/api/app/download`);
+      const r = await fetch(`/api/app/download`);
       if (!r.ok) throw new Error(await r.text());
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);

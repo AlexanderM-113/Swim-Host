@@ -50,7 +50,7 @@ export default function NewInvoice() {
 
   function onSubmit(data: InvoiceFormValues) {
     createInvoice.mutate(
-      { data },
+      { data: { ...data, status: "unpaid" } as any },
       {
         onSuccess: () => {
           toast({

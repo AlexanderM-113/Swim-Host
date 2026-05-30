@@ -61,8 +61,8 @@ export default function Teams() {
                 </TableCell>
                 <TableCell><Badge variant="outline">{team.abbreviation || "-"}</Badge></TableCell>
                 <TableCell>{team.lsc || "-"}</TableCell>
-                <TableCell>{team.coachName || "-"}</TableCell>
-                <TableCell className="text-right font-medium">{team.athleteCount || 0}</TableCell>
+                <TableCell>{(team as any).coachName || "-"}</TableCell>
+                <TableCell className="text-right font-medium">{(team as any).athleteCount || 0}</TableCell>
               </TableRow>
             ))}
             {!isLoading && (!teams || teams.length === 0) && (

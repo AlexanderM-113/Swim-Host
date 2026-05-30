@@ -7,9 +7,7 @@ export default function AthleteDetail() {
   const [, params] = useRoute("/athletes/:id");
   const athleteId = params?.id ? parseInt(params.id, 10) : 0;
 
-  const { data: athlete, isLoading } = useGetAthlete(athleteId, {
-    query: { enabled: !!athleteId, queryKey: getGetAthleteQueryKey(athleteId) }
-  });
+  const { data: athlete, isLoading } = useGetAthlete(athleteId);
 
   if (isLoading) return <div className="p-8">Loading athlete details...</div>;
   if (!athlete) return <div className="p-8">Athlete not found</div>;
@@ -22,7 +20,7 @@ export default function AthleteDetail() {
         </div>
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{athlete.firstName} {athlete.lastName}</h1>
-          <p className="text-muted-foreground">{athlete.teamName || "Unattached"} • {athlete.gender} • Age {athlete.age || "-"}</p>
+          <p className="text-muted-foreground">{(athlete as any).teamName || "Unattached"} • {athlete.gender} • Age {(athlete as any).age || (athlete.dateOfBirth ? new Date().getFullYear() - new Date(athlete.dateOfBirth).getFullYear() : "—")}</p>
         </div>
       </div>
 

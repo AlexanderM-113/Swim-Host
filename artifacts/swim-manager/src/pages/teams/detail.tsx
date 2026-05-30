@@ -7,9 +7,7 @@ export default function TeamDetail() {
   const [, params] = useRoute("/teams/:id");
   const teamId = params?.id ? parseInt(params.id, 10) : 0;
 
-  const { data: team, isLoading } = useGetTeam(teamId, {
-    query: { enabled: !!teamId, queryKey: getGetTeamQueryKey(teamId) }
-  });
+  const { data: team, isLoading } = useGetTeam(teamId);
 
   if (isLoading) return <div className="p-8">Loading team details...</div>;
   if (!team) return <div className="p-8">Team not found</div>;
@@ -29,7 +27,7 @@ export default function TeamDetail() {
           <CardContent className="space-y-4">
              <div className="flex items-center gap-2">
                 <User className="h-4 w-4 text-muted-foreground" />
-                <span>Coach: {team.coachName || "Not assigned"}</span>
+                <span>Coach: {(team as any).coachName || "Not assigned"}</span>
               </div>
             {team.email && (
               <div className="flex items-center gap-2">
@@ -57,7 +55,7 @@ export default function TeamDetail() {
             <CardTitle>Roster Overview</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-4xl font-black text-primary">{team.athleteCount || 0}</div>
+            <div className="text-4xl font-black text-primary">{(team as any).athleteCount || 0}</div>
             <p className="text-muted-foreground mt-2">Registered Athletes</p>
           </CardContent>
         </Card>

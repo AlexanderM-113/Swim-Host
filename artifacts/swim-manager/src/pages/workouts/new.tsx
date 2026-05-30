@@ -75,7 +75,7 @@ export default function NewWorkout() {
     }, 0);
 
     createWorkout.mutate(
-      { data: { ...data, totalDistance } },
+      { data: { ...data, totalDistance } as any },
       {
         onSuccess: (workout) => {
           toast({

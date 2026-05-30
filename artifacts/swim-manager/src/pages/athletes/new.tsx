@@ -62,7 +62,7 @@ export default function NewAthlete() {
 
   function onSubmit(data: AthleteFormValues) {
     createAthlete.mutate(
-      { data },
+      { data: { ...data, active: true } as any },
       {
         onSuccess: (athlete) => {
           toast({

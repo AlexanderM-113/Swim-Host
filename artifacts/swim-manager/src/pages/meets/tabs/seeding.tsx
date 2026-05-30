@@ -37,7 +37,7 @@ export default function MeetSeeding({ meetId }: { meetId: number }) {
   function handleSeed() {
     if (!pendingEventId) return;
     seedEvent.mutate(
-      { eventId: pendingEventId, data: { lanes: parseInt(lanes), heatOrder, circleSeeding } },
+      { eventId: pendingEventId, data: { lanes: parseInt(lanes), order: heatOrder, circleSeeding } },
       {
         onSuccess: () => {
           toast({ title: "Event seeded successfully" });
@@ -69,7 +69,7 @@ export default function MeetSeeding({ meetId }: { meetId: number }) {
         return;
       }
       seedEvent.mutate(
-        { eventId: evt.id, data: { lanes: parseInt(lanes), heatOrder, circleSeeding } },
+        { eventId: evt.id, data: { lanes: parseInt(lanes), order: heatOrder, circleSeeding } },
         { onSuccess: seedNext, onError: () => seedNext() }
       );
     }

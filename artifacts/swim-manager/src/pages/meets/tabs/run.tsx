@@ -74,8 +74,9 @@ export default function MeetRun({ meetId }: { meetId: number }) {
 
     setResult.mutate(
       {
-        entryId: editLane.entryId,
+        eventId: parseInt(selectedEvent),
         data: {
+          entryId: editLane.entryId,
           finishTime: finishTimeSec ?? undefined,
           place: place ?? undefined,
           dq: form.dq,

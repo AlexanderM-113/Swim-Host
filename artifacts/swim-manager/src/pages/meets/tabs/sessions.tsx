@@ -30,12 +30,12 @@ export default function MeetSessions({ meetId }: { meetId: number }) {
           <TableBody>
             {sessions?.map(session => (
               <TableRow key={session.id}>
-                <TableCell>{session.sessionNumber}</TableCell>
+                <TableCell>{(session as any).sessionNumber}</TableCell>
                 <TableCell className="font-medium">{session.name}</TableCell>
                 <TableCell>{session.date ? format(new Date(session.date), "MMM d, yyyy") : "-"}</TableCell>
                 <TableCell>{session.warmupTime || "-"}</TableCell>
                 <TableCell>{session.startTime || "-"}</TableCell>
-                <TableCell>{session.sessionType || "-"}</TableCell>
+                <TableCell>{(session as any).sessionType || "-"}</TableCell>
               </TableRow>
             ))}
             {(!sessions || sessions.length === 0) && (

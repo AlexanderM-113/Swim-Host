@@ -43,7 +43,7 @@ export default function Billing() {
             <ReceiptText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${summary?.totalOutstanding?.toFixed(2) || "0.00"}</div>
+            <div className="text-2xl font-bold">${summary?.outstanding?.toFixed(2) || "0.00"}</div>
           </CardContent>
         </Card>
         <Card>
@@ -52,7 +52,7 @@ export default function Billing() {
             <ReceiptText className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-destructive">${summary?.totalOverdue?.toFixed(2) || "0.00"}</div>
+            <div className="text-2xl font-bold text-destructive">{summary?.overdueCount ?? 0} invoice{summary?.overdueCount !== 1 ? "s" : ""} overdue</div>
           </CardContent>
         </Card>
         <Card>
@@ -61,7 +61,7 @@ export default function Billing() {
             <ReceiptText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${summary?.totalPaid?.toFixed(2) || "0.00"}</div>
+            <div className="text-2xl font-bold">${summary?.paid?.toFixed(2) || "0.00"}</div>
           </CardContent>
         </Card>
       </div>
@@ -83,7 +83,7 @@ export default function Billing() {
               <TableRow key={invoice.id}>
                 <TableCell className="font-medium font-mono text-xs">INV-{invoice.id.toString().padStart(5, '0')}</TableCell>
                 <TableCell>{invoice.athleteName}</TableCell>
-                <TableCell>{invoice.invoiceType}</TableCell>
+                <TableCell>{(invoice as any).invoiceType ?? (invoice as any).type ?? "—"}</TableCell>
                 <TableCell>
                   {invoice.dueDate ? format(new Date(invoice.dueDate), "MMM d, yyyy") : "-"}
                 </TableCell>

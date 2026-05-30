@@ -8,9 +8,7 @@ export default function WorkoutDetail() {
   const [, params] = useRoute("/workouts/:id");
   const workoutId = params?.id ? parseInt(params.id, 10) : 0;
 
-  const { data: workout, isLoading } = useGetWorkout(workoutId, {
-    query: { enabled: !!workoutId, queryKey: getGetWorkoutQueryKey(workoutId) }
-  });
+  const { data: workout, isLoading } = useGetWorkout(workoutId);
 
   if (isLoading) return <div className="p-8">Loading workout...</div>;
   if (!workout) return <div className="p-8">Workout not found</div>;
@@ -18,11 +16,11 @@ export default function WorkoutDetail() {
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">{workout.title}</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{(workout as any).title || workout.name}</h1>
         <p className="text-muted-foreground mt-1">
           {workout.date ? format(new Date(workout.date), "EEEE, MMMM d, yyyy") : "No Date"} 
-          {" • "}{workout.teamName || "General Group"}
-          {" • "}<span className="font-mono text-primary font-bold">{workout.totalDistance} {workout.course}</span>
+          {" • "}{(workout as any).teamName || "General Group"}
+          {" • "}<span className="font-mono text-primary font-bold">{(workout as any).totalDistance || (workout as any).distance} {(workout as any).course}</span>
         </p>
       </div>
 
@@ -43,7 +41,7 @@ export default function WorkoutDetail() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {workout.sets?.map((set, index) => (
+              {(typeof (workout as any).sets === "string" ? JSON.parse((workout as any).sets) : (workout as any).sets ?? []).map((set: any, index: number) => (
                 <TableRow key={set.id}>
                   <TableCell className="font-bold text-muted-foreground">{index + 1}</TableCell>
                   <TableCell className="text-right font-mono">{set.repetitions} x</TableCell>
@@ -53,7 +51,7 @@ export default function WorkoutDetail() {
                   <TableCell className="font-mono text-primary">{set.restInterval || "-"}</TableCell>
                 </TableRow>
               ))}
-              {(!workout.sets || workout.sets.length === 0) && (
+              {(!(workout as any).sets || (typeof (workout as any).sets === "string" ? JSON.parse((workout as any).sets) : (workout as any).sets).length === 0) && (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                     No sets found in this workout.

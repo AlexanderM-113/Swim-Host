@@ -145,7 +145,7 @@ export default function Reports() {
     generateTeamRoster(doc);
   }
   async function genTeamEntryReport() {
-    const [meetData, entryData] = await Promise.all([
+    const [meetData] = await Promise.all([
       apiFetch(`/meets/${selectedMeet}/entry-list-by-team`),
     ]);
     const team = meetData.teams?.find((t: any) => t.team.id === parseInt(selectedTeam));

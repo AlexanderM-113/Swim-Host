@@ -123,7 +123,7 @@ export default function TimingConsolePage() {
 
   const eventLanes = (() => {
     const evt = events?.find((e: any) => e.id === parseInt(selectedEvent));
-    return evt?.lanes || 8;
+    return (evt as any)?.lanes || 8;
   })();
 
   useEffect(() => {
@@ -211,18 +211,21 @@ export default function TimingConsolePage() {
     let success = 0;
     for (const l of lanes) {
       const heatEntry = heatLanes.find((h: any) => h.lane === l.lane);
-      if (!heatEntry?.entryId) continue;
+      if (!(heatEntry as any)?.entryId) continue;
       const place = l.ns || l.dq ? null : (sorted.findIndex(s => s.lane === l.lane) + 1 || null);
       try {
         await setResult.mutateAsync({
-          entryId: heatEntry.entryId,
-          finishTime: (l.ns || l.dq) ? null : l.time,
-          place,
-          dq: l.dq,
-          dqCode: "",
-          ns: l.ns,
-          dnf: false,
-          splits: "",
+          eventId: parseInt(selectedEvent),
+          data: {
+            entryId: (heatEntry as any).entryId,
+            finishTime: (l.ns || l.dq) ? undefined : (l.time ?? undefined),
+            place: place ?? undefined,
+            dq: l.dq,
+            dqCode: "",
+            ns: l.ns,
+            dnf: false,
+            splits: "",
+          },
         });
         success++;
       } catch {}
@@ -353,8 +356,8 @@ export default function TimingConsolePage() {
                   <div className="grid grid-cols-1 gap-2">
                     {lanes.map(l => {
                       const heatEntry = currentHeatLanes.find((h: any) => h.lane === l.lane);
-                      const athlete = heatEntry ? `${heatEntry.firstName} ${heatEntry.lastName}` : "—";
-                      const seedTime = heatEntry?.seedTime ? formatTime(heatEntry.seedTime) : "NT";
+                      const athlete = heatEntry ? `${(heatEntry as any).firstName ?? ""} ${(heatEntry as any).lastName ?? ""}`.trim() || "—" : "—";
+                      const seedTime = (heatEntry as any)?.seedTime ? formatTime((heatEntry as any).seedTime) : "NT";
                       return (
                         <div key={l.lane} className={cn(
                           "flex items-center gap-3 rounded-lg px-4 py-3 border transition-all",
@@ -371,7 +374,7 @@ export default function TimingConsolePage() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="font-semibold text-sm text-white truncate">{athlete}</div>
-                            <div className="text-xs text-slate-500">Seed: {seedTime} {heatEntry?.teamName ? `· ${heatEntry.teamName}` : ""}</div>
+                            <div className="text-xs text-slate-500">Seed: {seedTime} {(heatEntry as any)?.teamName ? `· ${(heatEntry as any).teamName}` : ""}</div>
                           </div>
                           <div className="font-mono text-xl font-bold min-w-[100px] text-right">
                             {l.ns ? <span className="text-slate-500 text-base">NS</span> :

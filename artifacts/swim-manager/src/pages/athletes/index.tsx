@@ -16,7 +16,10 @@ import { useState } from "react";
 
 export default function Athletes() {
   const [search, setSearch] = useState("");
-  const { data: athletes, isLoading } = useListAthletes({ search: search || undefined });
+  const { data: allAthletes, isLoading } = useListAthletes();
+  const athletes = search
+    ? allAthletes?.filter((a: any) => `${a.firstName} ${a.lastName}`.toLowerCase().includes(search.toLowerCase()))
+    : allAthletes;
 
   return (
     <div className="space-y-6">
@@ -69,10 +72,10 @@ export default function Athletes() {
                 </TableCell>
                 <TableCell>{athlete.gender}</TableCell>
                 <TableCell>
-                  {athlete.age ? athlete.age : "-"} 
+                  {(athlete as any).age || (athlete.dateOfBirth ? new Date().getFullYear() - new Date(athlete.dateOfBirth).getFullYear() : "—")} 
                   {athlete.dateOfBirth && <span className="text-muted-foreground text-xs ml-2">({athlete.dateOfBirth})</span>}
                 </TableCell>
-                <TableCell>{athlete.teamName || "Unattached"}</TableCell>
+                <TableCell>{(athlete as any).teamName || "Unattached"}</TableCell>
                 <TableCell className="font-mono text-xs">{athlete.idNumber || "-"}</TableCell>
               </TableRow>
             ))}
