@@ -272,46 +272,50 @@ export function parseSDIF(text: string): SDIFFile {
       }
 
       case "D0": {
-        // Individual event entry
+        // Individual event entry (SDIF v3.0 field positions, 1-indexed in spec)
         if (currentTeam && currentEntry) {
           currentTeam.entries.push(currentEntry);
         }
         currentEntry = {
-          athleteLastName: line.substring(3, 21).trim(),
-          athleteFirstName: line.substring(21, 29).trim(),
-          middleInitial: line[29]?.trim() ?? "",
-          ussNumber: line.substring(30, 42).trim(),
-          dateOfBirth: parseSdifDate(line.substring(43, 51)),
-          ageMin: parseInt(line.substring(51, 53)) || 0,
-          ageMax: parseInt(line.substring(53, 55)) || 0,
-          gender: (line[55]?.trim() || "M") as "M" | "F" | "X",
-          eventNumber: parseInt(line.substring(56, 60)) || 0,
-          eventGender: (line[60]?.trim() || "M") as "M" | "F" | "X",
-          distance: parseInt(line.substring(61, 65)) || 0,
-          stroke: (parseInt(line.substring(65, 67)) || 1) as SDIFStroke,
-          seedTime: parseSdifTime(line.substring(73, 80)),
-          seedCourse: line[80]?.trim() ?? "Y",
+          athleteLastName: line.substring(3, 21).trim(),   // cols 4-21
+          athleteFirstName: line.substring(21, 29).trim(), // cols 22-29
+          middleInitial: line[29]?.trim() ?? "",           // col 30
+          ussNumber: line.substring(30, 42).trim(),        // cols 31-42
+          // col 43 = blank/attached flag (skipped)
+          dateOfBirth: parseSdifDate(line.substring(43, 51)), // cols 44-51
+          ageMin: parseInt(line.substring(51, 53)) || 0,   // cols 52-53
+          ageMax: parseInt(line.substring(53, 55)) || 0,   // cols 54-55
+          gender: (line[55]?.trim() || "M") as "M" | "F" | "X", // col 56
+          eventNumber: parseInt(line.substring(56, 60)) || 0,    // cols 57-60
+          eventGender: (line[60]?.trim() || "M") as "M" | "F" | "X", // col 61
+          distance: parseInt(line.substring(61, 65)) || 0, // cols 62-65
+          stroke: (parseInt(line.substring(65, 67)) || 1) as SDIFStroke, // cols 66-67
+          // cols 68-72 = event sex/age/other (skipped)
+          seedTime: parseSdifTime(line.substring(72, 79)), // cols 73-79 (7 chars)
+          seedCourse: line[79]?.trim() || "Y",             // col 80
         };
         break;
       }
 
       case "D3": {
-        // Individual event result (extends D0 or standalone)
+        // Individual event result — same header as D0; finish time at same position
         if (currentTeam && currentEntry) {
-          // This is a result for the current entry
+          // Result for preceding D0 entry
           currentEntry.result = {
-            finishTime: parseSdifTime(line.substring(73, 80)),
-            course: line[80]?.trim() ?? "Y",
-            place: parseInt(line.substring(81, 85)) || null,
-            points: parseFloat(line.substring(85, 89)) || 0,
-            dq: line[89]?.trim() === "1",
-            dqCode: line.substring(90, 92).trim(),
-            ns: line[92]?.trim() === "1",
-            dnf: line[93]?.trim() === "1",
+            finishTime: parseSdifTime(line.substring(72, 79)), // cols 73-79
+            course: line[79]?.trim() || "Y",                   // col 80
+            place: parseInt(line.substring(80, 84)) || null,   // cols 81-84
+            points: parseFloat(line.substring(84, 88)) || 0,  // cols 85-88
+            dq: line[88]?.trim() === "1",                      // col 89
+            dqCode: line.substring(89, 91).trim(),             // cols 90-91
+            ns: line[91]?.trim() === "1",                      // col 92
+            dnf: line[92]?.trim() === "1",                     // col 93
             splits: [],
           };
         } else if (currentTeam) {
-          // Standalone result without D0 - treat as entry with result
+          // Standalone result (results-only file without preceding D0)
+          // At cols 73-79, D3 has FINISH time (not seed time)
+          const finishTime = parseSdifTime(line.substring(72, 79));
           currentEntry = {
             athleteLastName: line.substring(3, 21).trim(),
             athleteFirstName: line.substring(21, 29).trim(),
@@ -325,20 +329,31 @@ export function parseSDIF(text: string): SDIFFile {
             eventGender: (line[60]?.trim() || "M") as "M" | "F" | "X",
             distance: parseInt(line.substring(61, 65)) || 0,
             stroke: (parseInt(line.substring(65, 67)) || 1) as SDIFStroke,
-            seedTime: parseSdifTime(line.substring(73, 80)),
-            seedCourse: line[80]?.trim() ?? "Y",
+            seedTime: null, // D3 only has finish time, no seed time in standalone
+            seedCourse: line[79]?.trim() || "Y",
             result: {
-              finishTime: parseSdifTime(line.substring(73, 80)),
-              course: line[80]?.trim() ?? "Y",
-              place: parseInt(line.substring(81, 85)) || null,
-              points: parseFloat(line.substring(85, 89)) || 0,
-              dq: line[89]?.trim() === "1",
-              dqCode: line.substring(90, 92).trim(),
-              ns: line[92]?.trim() === "1",
-              dnf: line[93]?.trim() === "1",
+              finishTime,
+              course: line[79]?.trim() || "Y",
+              place: parseInt(line.substring(80, 84)) || null,
+              points: parseFloat(line.substring(84, 88)) || 0,
+              dq: line[88]?.trim() === "1",
+              dqCode: line.substring(89, 91).trim(),
+              ns: line[91]?.trim() === "1",
+              dnf: line[92]?.trim() === "1",
               splits: [],
             },
           };
+        }
+        break;
+      }
+
+      case "E0":
+      case "E1":
+      case "E2": {
+        // Relay event records — flush pending individual entry and skip relay parsing
+        if (currentTeam && currentEntry) {
+          currentTeam.entries.push(currentEntry);
+          currentEntry = null;
         }
         break;
       }

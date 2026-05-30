@@ -1,1 +1,2 @@
 - [SwimManager Pro localStorage arch](swim-manager-local-store.md) — full localStorage-based architecture, no backend required; all CRUD via local-store.ts hooks
+- [SDIF field offsets](sdif-field-offsets.md) — corrected D0/D3 seedTime/finishTime positions (72-79 not 73-80) and relay record flushing
