@@ -17,6 +17,7 @@ import MeetTeamScores from "./tabs/team-scores";
 import MeetOfficials from "./tabs/officials";
 import MeetSchedule from "./tabs/schedule";
 import MeetDeclarations from "./tabs/declarations";
+import MeetWebsite from "./tabs/website";
 
 export default function MeetDetail() {
   const [match, params] = useRoute("/meets/:id/*?");
@@ -43,6 +44,7 @@ export default function MeetDetail() {
     { label: "Schedule", value: "schedule", href: `/meets/${meetId}/schedule` },
     { label: "Officials", value: "officials", href: `/meets/${meetId}/officials` },
     { label: "Team Scores", value: "scores", href: `/meets/${meetId}/scores` },
+    { label: "Website & Live", value: "website", href: `/meets/${meetId}/website` },
   ];
 
   return (
@@ -101,6 +103,7 @@ export default function MeetDetail() {
             <Route path={`/meets/${meetId}/schedule`}><MeetSchedule meetId={meetId} /></Route>
             <Route path={`/meets/${meetId}/officials`}><MeetOfficials meetId={meetId} /></Route>
             <Route path={`/meets/${meetId}/scores`}><MeetTeamScores meetId={meetId} /></Route>
+            <Route path={`/meets/${meetId}/website`}><MeetWebsite meetId={meetId} /></Route>
           </Switch>
         </div>
       </Tabs>

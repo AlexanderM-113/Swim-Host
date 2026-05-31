@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import {
   Activity, Users, MapPin, Settings, ReceiptText, Trophy,
   FileText, Globe, Monitor, ArrowLeftRight, Timer, Star, Layers,
-  Dumbbell, Waves, LayoutGrid,
+  Dumbbell, Waves, LayoutGrid, BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useModule } from "@/contexts/module-context";
@@ -28,30 +28,34 @@ const ALL_NAV: NavItem[] = [
   { name: "SDIF / Import-Export", href: "/sdif", icon: ArrowLeftRight },
   { name: "Web Generator", href: "/webgen", icon: Globe },
   { name: "Scoreboard", href: "/scoreboard", icon: Monitor },
+  { name: "Analytics & AI", href: "/analytics", icon: BarChart3 },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
 const MODULE_NAV: Record<string, string[]> = {
-  meet: ["/", "/meets", "/timing", "/reports", "/sdif", "/scoreboard", "/settings"],
-  team: ["/", "/athletes", "/teams", "/groups", "/records", "/billing", "/reports", "/settings"],
-  workout: ["/", "/workouts", "/athletes", "/groups", "/settings"],
+  meet: ["/", "/meets", "/timing", "/reports", "/sdif", "/scoreboard", "/analytics", "/settings"],
+  team: ["/", "/athletes", "/teams", "/groups", "/records", "/billing", "/reports", "/analytics", "/settings"],
+  workout: ["/", "/workouts", "/athletes", "/groups", "/analytics", "/settings"],
 };
 
 const MODULE_SECTIONS: Record<string, { label: string; hrefs: string[] }[]> = {
   meet: [
     { label: "Meet Management", hrefs: ["/meets", "/timing"] },
     { label: "Tools", hrefs: ["/reports", "/sdif", "/scoreboard"] },
+    { label: "Analytics & AI", hrefs: ["/analytics"] },
     { label: "System", hrefs: ["/settings"] },
   ],
   team: [
     { label: "Roster", hrefs: ["/athletes", "/teams", "/groups"] },
     { label: "Records & Finance", hrefs: ["/records", "/billing"] },
     { label: "Tools", hrefs: ["/reports"] },
+    { label: "Analytics & AI", hrefs: ["/analytics"] },
     { label: "System", hrefs: ["/settings"] },
   ],
   workout: [
     { label: "Training", hrefs: ["/workouts", "/groups"] },
     { label: "Athletes", hrefs: ["/athletes"] },
+    { label: "Analytics & AI", hrefs: ["/analytics"] },
     { label: "System", hrefs: ["/settings"] },
   ],
 };

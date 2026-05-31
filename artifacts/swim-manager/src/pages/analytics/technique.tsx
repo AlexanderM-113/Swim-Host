@@ -107,7 +107,7 @@ export default function TechniqueAnalytics() {
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [mode, setMode] = useState<"upload" | "camera">("upload");
+  const [mode, setMode] = useState<"file" | "camera">("file");
   const [stroke, setStroke] = useState("Freestyle");
   const [analyzing, setAnalyzing] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -223,8 +223,8 @@ export default function TechniqueAnalytics() {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <button
-              className={`rounded-lg border-2 p-4 text-left transition-all ${mode === "upload" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}
-              onClick={() => { setMode("upload"); stopCamera(); }}
+              className={`rounded-lg border-2 p-4 text-left transition-all ${mode === "file" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}
+              onClick={() => { setMode("file"); stopCamera(); }}
             >
               <Upload className="h-6 w-6 mb-2 text-primary" />
               <div className="font-semibold text-sm">Upload Video</div>
@@ -254,7 +254,7 @@ export default function TechniqueAnalytics() {
             </Select>
           </div>
 
-          {mode === "upload" ? (
+          {mode === "file" ? (
             <div>
               <input
                 ref={fileRef}
@@ -313,7 +313,7 @@ export default function TechniqueAnalytics() {
 
           <Button
             className="w-full"
-            disabled={analyzing || (mode === "upload" ? !selectedFile : !cameraActive)}
+            disabled={analyzing || (mode === "file" ? !selectedFile : !cameraActive)}
             onClick={() => runAnalysis(mode)}
           >
             {analyzing ? <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Analyzing Technique…</> : <><Play className="h-4 w-4 mr-2" /> Run Analysis</>}

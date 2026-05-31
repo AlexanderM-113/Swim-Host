@@ -32,6 +32,12 @@ import SDIFPage from "@/pages/sdif";
 import TimingConsole from "@/pages/timing";
 import RecordsPage from "@/pages/records";
 import GroupsPage from "@/pages/groups";
+import AnalyticsHub from "@/pages/analytics";
+import FinancialIntelligence from "@/pages/analytics/financial";
+import RelayBuilder from "@/pages/analytics/relay";
+import AthleteReadiness from "@/pages/analytics/readiness";
+import VideoAnalysis from "@/pages/analytics/video";
+import TechniqueAnalytics from "@/pages/analytics/technique";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -78,6 +84,13 @@ function Router() {
         <Route path="/timing" component={TimingConsole} />
         <Route path="/records" component={RecordsPage} />
         <Route path="/groups" component={GroupsPage} />
+
+        <Route path="/analytics/financial" component={FinancialIntelligence} />
+        <Route path="/analytics/relay" component={RelayBuilder} />
+        <Route path="/analytics/readiness" component={AthleteReadiness} />
+        <Route path="/analytics/video" component={VideoAnalysis} />
+        <Route path="/analytics/technique" component={TechniqueAnalytics} />
+        <Route path="/analytics" component={AnalyticsHub} />
 
         <Route component={NotFound} />
       </Switch>
