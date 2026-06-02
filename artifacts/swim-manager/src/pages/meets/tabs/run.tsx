@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useListEvents, useListHeats, useSetResult, getListHeatsQueryKey, readStore, useGetSettings } from "@/lib/local-store";
+import { useState, useEffect } from "react";
+import { useListEvents, useListHeats, useSetResult, getListHeatsQueryKey, readStore } from "@/lib/local-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -13,7 +13,9 @@ import { Progress } from "@/components/ui/progress";
 import { formatTime, parseTime } from "@/lib/format-time";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { CheckCircle, Edit2, AlertTriangle, Wifi, WifiOff, Send, Loader2 } from "lucide-react";
+import { CheckCircle, Edit2, Wifi, Send, Loader2, Radio } from "lucide-react";
+import { broadcastRun } from "@/lib/live-broadcast";
+import { autoPushLiveResults } from "@/lib/live-push";
 
 interface ResultForm {
   finishTime: string;
@@ -45,7 +47,6 @@ function fmtTime(secs: number | null | undefined) {
 
 export default function MeetRun({ meetId }: { meetId: number }) {
   const { data: events } = useListEvents(meetId);
-  const { data: settings } = useGetSettings();
   const [selectedEvent, setSelectedEvent] = useState<string>("");
   const [editLane, setEditLane] = useState<any | null>(null);
   const [editHeat, setEditHeat] = useState<number | null>(null);
@@ -54,6 +55,19 @@ export default function MeetRun({ meetId }: { meetId: number }) {
   });
   const [pushing, setPushing] = useState(false);
   const [lastPush, setLastPush] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedEvent || !events) return;
+    const event = events.find((e) => String(e.id) === selectedEvent);
+    if (!event) return;
+    broadcastRun({
+      meetId,
+      eventId: parseInt(selectedEvent),
+      eventNumber: event.eventNumber,
+      eventDescription: `${event.gender === "F" ? "Women's" : "Men's"} ${event.ageGroup || "Open"} ${event.distance} ${event.stroke}`,
+      updatedAt: new Date().toISOString(),
+    });
+  }, [selectedEvent, events, meetId]);
 
   const { data: heats, isLoading, refetch } = useListHeats(
     selectedEvent ? parseInt(selectedEvent, 10) : 0,
@@ -101,6 +115,9 @@ export default function MeetRun({ meetId }: { meetId: number }) {
           setEditLane(null);
           queryClient.invalidateQueries({ queryKey: getListHeatsQueryKey(parseInt(selectedEvent)) });
           refetch();
+          autoPushLiveResults(meetId)
+            .then(() => setLastPush(new Date().toLocaleTimeString()))
+            .catch(() => {});
         },
         onError: (err: any) => {
           toast({ title: "Failed to save result", description: err?.message, variant: "destructive" });

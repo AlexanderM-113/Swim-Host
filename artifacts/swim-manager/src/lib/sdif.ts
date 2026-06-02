@@ -448,63 +448,87 @@ export function generateSDIF(data: SDIFExportData, opts: SDIFExportOptions = { t
   const a0 = `A01${today}${fname}${swver}${prog} ${today} 1    `;
   lines.push(a0.substring(0, 60));
 
-  // B1 — Meet (90 chars)
-  const meetName = pad(data.meet.name, 30, true);
-  const facility = pad(data.meet.facility ?? data.meet.city ?? "", 35, true);
-  const startDt = sdifDate(data.meet.startDate);
-  const endDt = sdifDate(data.meet.endDate ?? data.meet.startDate);
-  const alt = pad(data.meet.altitude ?? 0, 4);
+  // B1 — Meet record (field sizes per SDIF v3 spec, 1-indexed cols)
+  // col 4-11 = reserved (8), col 12-30 = meet name (19), col 31-65 = facility (35)
+  // col 66-73 = start date (8), col 74-81 = end date (8), col 82-85 = altitude (4), col 86 = course (1)
+  const meetName   = pad(data.meet.name, 19, true);
+  const facility   = pad(data.meet.facility ?? data.meet.city ?? "", 35, true);
+  const startDt    = sdifDate(data.meet.startDate);
+  const endDt      = sdifDate(data.meet.endDate ?? data.meet.startDate);
+  const alt        = pad(data.meet.altitude ?? 0, 4);
   const courseCode = COURSE_NAME_TO_CODE[data.meet.course] ?? data.meet.course[0] ?? "Y";
-  const lsc = pad(data.meet.hostLsc ?? "", 2, true);
-  const b1 = `B11        ${meetName}${facility}${startDt}${endDt}${alt}${courseCode}    `;
-  lines.push(b1.substring(0, 90));
+  const b1 = `B11        ${meetName}${facility}${startDt}${endDt}${alt}${courseCode}`;
+  lines.push(b1.padEnd(90, " "));
 
   // C1 + D0/D3 per team/entry
   for (const team of data.teams) {
-    const tCode = pad(team.code, 5, true);
-    const tAbbr = pad(team.abbreviation ?? team.code, 16, true);
-    const tName = pad(team.name, 30, true);
-    const tLsc = pad(team.lsc ?? "", 4, true);
-    const c1 = `C11${tCode}${tAbbr}${tName}${tLsc}   `;
-    lines.push(c1.substring(0, 60));
+    // C1 — Team record (field sizes per SDIF v3 spec, 1-indexed cols)
+    // col 4-7 = team code (4), col 8-19 = abbr (12), col 20-44 = name (25), col 45-48 = lsc (4), col 49-51 = country (3)
+    const tCode    = pad(team.code, 4, true);
+    const tAbbr    = pad(team.abbreviation ?? team.code, 12, true);
+    const tName    = pad(team.name, 25, true);
+    const tLsc     = pad(team.lsc ?? "", 4, true);
+    const tCountry = pad("USA", 3, true);
+    const c1 = `C11${tCode}${tAbbr}${tName}${tLsc}${tCountry}`;
+    lines.push(c1.padEnd(60, " "));
 
     for (const e of team.entries) {
-      const lname = pad(e.athleteLastName, 20, true);
-      const fname2 = pad(e.athleteFirstName, 12, true);
-      const ussn = pad(e.ussNumber ?? "", 14, true);
-      const dob = e.dateOfBirth ? sdifDate(e.dateOfBirth) : "        ";
-      const ageMin = pad(e.ageMin ?? 0, 2);
-      const ageMax = pad(e.ageMax ?? 99, 2);
-      const gender = genderCode(e.gender);
-      const evtNum = pad(e.eventNumber, 4);
+      // D0/D3 shared athlete header (field sizes per SDIF v3 spec):
+      // col 4-21  = last name (18)
+      // col 22-29 = first name (8)
+      // col 30    = middle initial (1)
+      // col 31-42 = USS number (12)
+      // col 43    = attached flag (1)
+      // col 44-51 = date of birth (8)
+      // col 52-53 = age min (2)
+      // col 54-55 = age max (2)
+      // col 56    = gender (1)
+      // col 57-60 = event number (4)
+      // col 61    = event gender (1)
+      // col 62-65 = distance (4)
+      // col 66-67 = stroke (2)
+      // col 68-72 = reserved (5)
+      // col 73-79 = seed/finish time (7)
+      // col 80    = course (1)
+      const lname     = pad(e.athleteLastName, 18, true);
+      const fname2    = pad(e.athleteFirstName, 8, true);
+      const mi        = " ";
+      const ussn      = pad(e.ussNumber ?? "", 12, true);
+      const attached  = " ";
+      const dob       = e.dateOfBirth ? sdifDate(e.dateOfBirth) : "        ";
+      const ageMin    = pad(e.ageMin ?? 0, 2);
+      const ageMax    = pad(e.ageMax ?? 99, 2);
+      const gender    = genderCode(e.gender);
+      const evtNum    = pad(e.eventNumber, 4);
       const evtGender = genderCode(e.eventGender);
-      const dist = pad(e.distance, 4);
-      const stCode = pad(strokeToCode(e.stroke), 2);
-      const seedTime = sdifTime(e.seedTime);
+      const dist      = pad(e.distance, 4);
+      const stCode    = pad(strokeToCode(e.stroke), 2);
+      const reserved  = "     ";
+      const seedTime  = sdifTime(e.seedTime);
       const seedCourse = COURSE_NAME_TO_CODE[e.seedCourse ?? ""] ?? "Y";
 
-      const includeEntry = opts.type === "entries" || opts.type === "both";
+      const includeEntry  = opts.type === "entries" || opts.type === "both";
       const includeResult = (opts.type === "results" || opts.type === "both") && e.result;
 
       if (includeEntry || !includeResult) {
-        // D0 - Individual Event Entry
-        const d0 = `D01${lname}${fname2} ${ussn}${dob}${ageMin}${ageMax}${gender}${evtNum}${evtGender}${dist}${stCode}      ${seedTime}${seedCourse}     `;
-        lines.push(d0.substring(0, 116));
+        // D0 — Individual Event Entry (80 chars of meaningful data)
+        const d0 = `D01${lname}${fname2}${mi}${ussn}${attached}${dob}${ageMin}${ageMax}${gender}${evtNum}${evtGender}${dist}${stCode}${reserved}${seedTime}${seedCourse}`;
+        lines.push(d0.padEnd(116, " "));
       }
 
       if (includeResult && e.result) {
-        // D3 - Individual Event Result
-        const r = e.result;
-        const finTime = sdifTime(r.finishTime);
+        // D3 — Individual Event Result (same header, finish time replaces seed time)
+        const r         = e.result;
+        const finTime   = sdifTime(r.finishTime);
         const finCourse = COURSE_NAME_TO_CODE[data.meet.course] ?? "Y";
-        const place = pad(r.place ?? 0, 4);
-        const pts = pad(r.points ?? 0, 4);
-        const dqFlag = r.dq ? "1" : "0";
-        const dqCode = pad(r.dqCode ?? "", 2, true);
-        const nsFlag = r.ns ? "1" : "0";
-        const dnfFlag = r.dnf ? "1" : "0";
-        const d3 = `D31${lname}${fname2} ${ussn}${dob}${ageMin}${ageMax}${gender}${evtNum}${evtGender}${dist}${stCode}      ${finTime}${finCourse}${place}${pts}${dqFlag}${dqCode}${nsFlag}${dnfFlag}  `;
-        lines.push(d3.substring(0, 120));
+        const place     = pad(r.place ?? 0, 4);
+        const pts       = pad(r.points ?? 0, 4);
+        const dqFlag    = r.dq ? "1" : "0";
+        const dqCode    = pad(r.dqCode ?? "", 2, true);
+        const nsFlag    = r.ns ? "1" : "0";
+        const dnfFlag   = r.dnf ? "1" : "0";
+        const d3 = `D31${lname}${fname2}${mi}${ussn}${attached}${dob}${ageMin}${ageMax}${gender}${evtNum}${evtGender}${dist}${stCode}${reserved}${finTime}${finCourse}${place}${pts}${dqFlag}${dqCode}${nsFlag}${dnfFlag}`;
+        lines.push(d3.padEnd(120, " "));
       }
     }
   }
