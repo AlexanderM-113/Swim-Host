@@ -127,56 +127,9 @@ export default function MeetRun({ meetId }: { meetId: number }) {
   }
 
   async function pushLiveResults() {
-    const apiUrl = settings?.backupUrl?.replace(/\/$/, "");
-    if (!apiUrl) {
-      toast({
-        title: "No API server configured",
-        description: "Set a backup/API server URL in Settings first.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setPushing(true);
     try {
-      const store = readStore();
-      const meetEvents = store.events.filter((e) => e.meetId === meetId);
-      const liveEvents = meetEvents.map((event) => {
-        const eventEntries = store.entries.filter((e) => e.eventId === event.id && !e.scratched);
-        const results = eventEntries.map((entry) => {
-          const result = store.results.find((r) => r.entryId === entry.id);
-          const athlete = store.athletes.find((a) => a.id === entry.athleteId);
-          const team = athlete?.teamId ? store.teams.find((t) => t.id === athlete.teamId) : null;
-          return {
-            athleteName: athlete ? `${athlete.firstName} ${athlete.lastName}` : "Unknown",
-            teamAbbreviation: team?.abbreviation ?? "UNAT",
-            seedTime: entry.seedTime ? formatTime(entry.seedTime) : "NT",
-            finishTime: result?.finishTime ? formatTime(result.finishTime) : null,
-            place: result?.place ?? null,
-            points: result?.points ?? null,
-            dq: result?.dq ?? false,
-            ns: result?.ns ?? false,
-            dnf: result?.dnf ?? false,
-          };
-        }).filter((r) => r.finishTime || r.dq || r.ns || r.dnf)
-          .sort((a, b) => (a.place ?? 999) - (b.place ?? 999));
-
-        return {
-          eventNumber: event.eventNumber,
-          description: `${event.gender === "F" ? "Women" : "Men"} ${event.ageGroup || "Open"} ${event.distance} ${event.stroke}`,
-          status: event.status,
-          results,
-        };
-      });
-
-      const resp = await fetch(`${apiUrl}/api/live/${meetId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ events: liveEvents }),
-      });
-
-      if (!resp.ok) throw new Error(`Server responded ${resp.status}`);
-      const data = await resp.json();
+      await autoPushLiveResults(meetId);
       setLastPush(new Date().toLocaleTimeString());
       toast({ title: "Results pushed live", description: `Updated at ${new Date().toLocaleTimeString()}` });
     } catch (e: any) {
@@ -221,6 +174,12 @@ export default function MeetRun({ meetId }: { meetId: number }) {
                 )}
               </div>
               <div className="flex items-center gap-2">
+                {selectedEvent && (
+                  <div className="flex items-center gap-1.5 text-xs text-cyan-600 dark:text-cyan-400 font-medium">
+                    <Radio className="h-3.5 w-3.5 animate-pulse" />
+                    Broadcasting
+                  </div>
+                )}
                 <Button
                   variant="outline"
                   size="sm"
@@ -235,7 +194,7 @@ export default function MeetRun({ meetId }: { meetId: number }) {
                   ) : (
                     <Send className="h-4 w-4 mr-2" />
                   )}
-                  {pushing ? "Pushing…" : lastPush ? `Pushed ${lastPush}` : "Push Live Results"}
+                  {pushing ? "Pushing…" : lastPush ? `Pushed ${lastPush}` : "Push to Website"}
                 </Button>
                 <div className="w-72">
                   <Select value={selectedEvent} onValueChange={setSelectedEvent}>

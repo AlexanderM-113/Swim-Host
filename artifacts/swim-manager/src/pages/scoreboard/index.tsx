@@ -5,10 +5,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import {
   Maximize2, Minimize2, Clock, ChevronLeft, ChevronRight, RefreshCw,
-  Play, Pause, SkipForward, Settings, X, Monitor
+  Play, Pause, Settings, X, Monitor, Radio
 } from "lucide-react";
 import { useListMeets, useListEvents, useListHeats } from "@/lib/local-store";
 import { formatTime } from "@/lib/format-time";
+import { subscribeToRun, getActiveRun } from "@/lib/live-broadcast";
 
 const LOGO_KEY = "swimmanager:clubLogo";
 const PLACE_MEDAL: Record<number, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
@@ -137,7 +138,24 @@ export default function Scoreboard() {
   const [showSettings, setShowSettings] = useState(false);
   const [customTitle, setCustomTitle] = useState("");
   const [clubLogo, setClubLogo] = useState<string>(() => localStorage.getItem(LOGO_KEY) ?? "");
+  const [followRun, setFollowRun] = useState(false);
   const refreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!followRun) return;
+    const initial = getActiveRun();
+    if (initial) {
+      setSelectedMeet(String(initial.meetId));
+      setSelectedEvent(String(initial.eventId));
+      setSelectedHeat(0);
+    }
+    return subscribeToRun((data) => {
+      if (!data) return;
+      setSelectedMeet(String(data.meetId));
+      setSelectedEvent(String(data.eventId));
+      setSelectedHeat(0);
+    });
+  }, [followRun]);
 
   const { data: meets } = useListMeets();
   const { data: events, refetch: refetchEvents } = useListEvents(
@@ -349,6 +367,17 @@ export default function Scoreboard() {
                 {autoAdvanceActive ? "Pause" : "Start"}
               </Button>
             )}
+
+            <Button
+              size="sm"
+              variant={followRun ? "default" : "outline"}
+              onClick={() => setFollowRun((v) => !v)}
+              className={followRun ? "bg-cyan-600 hover:bg-cyan-700 border-cyan-600" : ""}
+              title="Sync this scoreboard with the active event on the Run screen"
+            >
+              <Radio className={`h-4 w-4 mr-1 ${followRun ? "animate-pulse" : ""}`} />
+              {followRun ? "Following" : "Follow Run"}
+            </Button>
 
             <Button size="sm" variant={autoRefresh ? "default" : "outline"} onClick={() => setAutoRefresh((r) => !r)}>
               <RefreshCw className={`h-4 w-4 ${autoRefresh ? "animate-spin" : ""}`} />

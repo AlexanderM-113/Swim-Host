@@ -12,9 +12,11 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Timer, WifiOff, Play, Square, RotateCcw,
-  Settings, Zap, Radio, CheckCircle2, Keyboard, AlertTriangle, ChevronRight, Wifi
+  Settings, Zap, Radio, CheckCircle2, Keyboard, Wifi
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { subscribeToRun, getActiveRun } from "@/lib/live-broadcast";
+import { autoPushLiveResults } from "@/lib/live-push";
 
 type HardwareMode = "manual" | "cts" | "daktronics" | "omega" | "sim";
 
@@ -100,6 +102,7 @@ export default function TimingConsolePage() {
   const [lanes, setLanes] = useState<LaneTime[]>(buildLanes(8));
   const [committed, setCommitted] = useState(false);
   const [tab, setTab] = useState("timing");
+  const [followRun, setFollowRun] = useState(false);
 
   const { data: events } = useListEvents(selectedMeet ? parseInt(selectedMeet) : 0, {
     query: { enabled: !!selectedMeet }
@@ -114,12 +117,13 @@ export default function TimingConsolePage() {
   const wsRef = useRef<WebSocket | null>(null);
 
   const allHeats: number[] = heatsData
-    ? [...new Set(heatsData.map((h: any) => h.heat))].sort((a, b) => a - b)
+    ? heatsData.map((h: any) => h.heatNumber).sort((a: number, b: number) => a - b)
     : [];
 
-  const currentHeatLanes = selectedHeat !== null && heatsData
-    ? heatsData.filter((h: any) => h.heat === selectedHeat)
-    : [];
+  const currentHeatObj = selectedHeat !== null && heatsData
+    ? (heatsData.find((h: any) => h.heatNumber === selectedHeat) ?? null)
+    : null;
+  const currentHeatLanes: any[] = currentHeatObj?.lanes ?? [];
 
   const eventLanes = (() => {
     const evt = events?.find((e: any) => e.id === parseInt(selectedEvent));
@@ -133,6 +137,26 @@ export default function TimingConsolePage() {
     setCommitted(false);
     setStartedAt(null);
   }, [selectedEvent, selectedHeat, eventLanes]);
+
+  useEffect(() => {
+    if (!followRun) return;
+    const initial = getActiveRun();
+    if (initial) {
+      setSelectedMeet(String(initial.meetId));
+      setSelectedEvent(String(initial.eventId));
+      setSelectedHeat(null);
+    }
+    return subscribeToRun((data) => {
+      if (!data) return;
+      setSelectedMeet(String(data.meetId));
+      setSelectedEvent(String(data.eventId));
+      setSelectedHeat(null);
+      setRunning(false);
+      setElapsed(0);
+      setStartedAt(null);
+      setCommitted(false);
+    });
+  }, [followRun]);
 
   useEffect(() => {
     if (running) {
@@ -189,12 +213,12 @@ export default function TimingConsolePage() {
     setStartedAt(start);
     const baseTime = 25 + Math.random() * 40;
     const spread = 2;
-    currentHeatLanes.forEach((h: any, i: number) => {
+    currentHeatLanes.forEach((h: any) => {
       const delay = (baseTime + (Math.random() - 0.5) * spread) * 1000;
       setTimeout(() => {
         setElapsed((Date.now() - start) / 1000);
         setLanes(prev => prev.map(l =>
-          l.lane === h.lane ? { ...l, time: delay / 1000, touched: true } : l
+          l.lane === (h.laneNumber ?? h.lane) ? { ...l, time: delay / 1000, touched: true } : l
         ));
       }, delay);
     });
@@ -204,13 +228,12 @@ export default function TimingConsolePage() {
 
   async function commitResults() {
     if (!selectedEvent || selectedHeat === null) return;
-    const heatLanes = currentHeatLanes;
     const timedLanes = lanes.filter(l => l.touched || l.ns);
     const sorted = [...timedLanes].filter(l => l.time !== null).sort((a, b) => (a.time ?? 0) - (b.time ?? 0));
 
     let success = 0;
     for (const l of lanes) {
-      const heatEntry = heatLanes.find((h: any) => h.lane === l.lane);
+      const heatEntry = currentHeatLanes.find((h: any) => (h.laneNumber ?? h.lane) === l.lane);
       if (!(heatEntry as any)?.entryId) continue;
       const place = l.ns || l.dq ? null : (sorted.findIndex(s => s.lane === l.lane) + 1 || null);
       try {
@@ -233,6 +256,9 @@ export default function TimingConsolePage() {
     queryClient.invalidateQueries({ queryKey: getListHeatsQueryKey(parseInt(selectedEvent)) });
     setCommitted(true);
     toast({ title: `Committed ${success} results`, description: `Heat ${selectedHeat} results saved.` });
+    if (selectedMeet) {
+      autoPushLiveResults(parseInt(selectedMeet)).catch(() => {});
+    }
   }
 
   function connectHardware() {
@@ -275,6 +301,16 @@ export default function TimingConsolePage() {
           <p className="text-muted-foreground text-sm">Live heat timing — manual or hardware interface</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant={followRun ? "default" : "outline"}
+            onClick={() => setFollowRun((v) => !v)}
+            className={followRun ? "bg-cyan-700 hover:bg-cyan-600 border-cyan-700" : ""}
+            title="Auto-select event from the Meet Manager Run screen"
+          >
+            <Radio className={`h-3.5 w-3.5 mr-1 ${followRun ? "animate-pulse" : ""}`} />
+            {followRun ? "Following Run Screen" : "Follow Run Screen"}
+          </Button>
           {connected
             ? <Badge className="bg-green-500/20 text-green-400 border-green-500/30"><Wifi className="h-3 w-3 mr-1" />Connected</Badge>
             : <Badge variant="outline" className="text-slate-400"><WifiOff className="h-3 w-3 mr-1" />Disconnected</Badge>}
@@ -355,8 +391,8 @@ export default function TimingConsolePage() {
 
                   <div className="grid grid-cols-1 gap-2">
                     {lanes.map(l => {
-                      const heatEntry = currentHeatLanes.find((h: any) => h.lane === l.lane);
-                      const athlete = heatEntry ? `${(heatEntry as any).firstName ?? ""} ${(heatEntry as any).lastName ?? ""}`.trim() || "—" : "—";
+                      const heatEntry = currentHeatLanes.find((h: any) => (h.laneNumber ?? h.lane) === l.lane);
+                      const athlete = (heatEntry as any)?.athleteName || "—";
                       const seedTime = (heatEntry as any)?.seedTime ? formatTime((heatEntry as any).seedTime) : "NT";
                       return (
                         <div key={l.lane} className={cn(
