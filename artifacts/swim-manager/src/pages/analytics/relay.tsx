@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useListAthletes, useListMeets, useListEvents, useListEntries } from "@/lib/local-store";
+import { useListAthletes, useListMeets, readStore } from "@/lib/local-store";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -97,6 +97,30 @@ export default function RelayBuilder() {
 
   const config = RELAY_CONFIGS[relayType];
 
+  // Build bestTimes map from actual meet results in the store
+  const bestTimesMap = useMemo(() => {
+    const store = readStore();
+    const map = new Map<number, Record<string, Record<number, number>>>();
+    for (const result of store.results) {
+      if (!result.finishTime || result.dq || result.ns || result.dnf) continue;
+      const entry = store.entries.find((e) => e.id === result.entryId);
+      if (!entry?.athleteId) continue;
+      const event = store.events.find((ev) => ev.id === entry.eventId);
+      if (!event) continue;
+      const athleteId = entry.athleteId;
+      if (!map.has(athleteId)) map.set(athleteId, {});
+      const athleteMap = map.get(athleteId)!;
+      const stroke = event.stroke;
+      const distance = event.distance;
+      if (!athleteMap[stroke]) athleteMap[stroke] = {};
+      const prev = athleteMap[stroke][distance];
+      if (!prev || result.finishTime < prev) {
+        athleteMap[stroke][distance] = result.finishTime;
+      }
+    }
+    return map;
+  }, [athletes]);
+
   const athletePool = useMemo((): AthleteWithTimes[] => {
     return (athletes as any[])
       .filter((a: any) => !gender || a.gender === gender)
@@ -104,9 +128,9 @@ export default function RelayBuilder() {
         id: a.id,
         name: `${a.firstName} ${a.lastName}`,
         teamName: a.teamName,
-        bestTimes: a.bestTimes ?? {},
+        bestTimes: bestTimesMap.get(a.id) ?? {},
       }));
-  }, [athletes, gender]);
+  }, [athletes, gender, bestTimesMap]);
 
   const eligibleAthletes = useMemo(() => {
     return athletePool.filter((a) =>
@@ -115,13 +139,17 @@ export default function RelayBuilder() {
   }, [athletePool, selectedAthletes]);
 
   function getBestTime(a: AthleteWithTimes, stroke: string, distance: number): number | null {
-    const key = getBestTimeKey(stroke, distance);
-    const val = a.bestTimes?.[stroke]?.[distance] ?? a.bestTimes?.[key];
-    if (val) return val;
-    const matched = Object.entries(a.bestTimes ?? {}).find(([k]) =>
-      k.toLowerCase().includes(stroke.toLowerCase().slice(0, 4)) && k.includes(String(distance))
-    );
-    return matched ? (matched[1] as any) : null;
+    const direct = a.bestTimes?.[stroke]?.[distance];
+    if (direct) return direct;
+    // Fuzzy stroke match (e.g. "Free" matches "Freestyle")
+    for (const [s, dists] of Object.entries(a.bestTimes ?? {})) {
+      if (s.toLowerCase().startsWith(stroke.toLowerCase().slice(0, 4)) ||
+          stroke.toLowerCase().startsWith(s.toLowerCase().slice(0, 4))) {
+        const t = (dists as Record<number, number>)[distance];
+        if (t) return t;
+      }
+    }
+    return null;
   }
 
   function buildRelayTeams() {

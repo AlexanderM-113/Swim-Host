@@ -21,6 +21,7 @@ import officialsRouter from "./officials";
 import recordsRouter from "./records";
 import groupsRouter from "./groups";
 import attendanceRouter from "./attendance";
+import backupRouter from "./backup";
 
 const router: IRouter = Router();
 
@@ -46,5 +47,6 @@ router.use(officialsRouter);
 router.use(recordsRouter);
 router.use(groupsRouter);
 router.use(attendanceRouter);
+router.use(backupRouter);
 
 export default router;

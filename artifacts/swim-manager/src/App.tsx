@@ -7,6 +7,7 @@ import { startAutoBackup } from "@/lib/backup-service";
 import { Layout } from "@/components/layout";
 import { ModuleProvider } from "@/contexts/module-context";
 import { LaunchModal } from "@/components/launch-modal";
+import { OfflineBanner } from "@/components/offline-banner";
 import NotFound from "@/pages/not-found";
 
 import Dashboard from "@/pages/dashboard";
@@ -24,6 +25,7 @@ import NewWorkout from "@/pages/workouts/new";
 import WorkoutDetail from "@/pages/workouts/detail";
 import Billing from "@/pages/billing";
 import NewInvoice from "@/pages/billing/new";
+import PaymentPlans from "@/pages/billing/payment-plans";
 import Reports from "@/pages/reports";
 import WebGen from "@/pages/webgen";
 import Settings from "@/pages/settings";
@@ -32,6 +34,7 @@ import SDIFPage from "@/pages/sdif";
 import TimingConsole from "@/pages/timing";
 import RecordsPage from "@/pages/records";
 import GroupsPage from "@/pages/groups";
+import TimeStandardsPage from "@/pages/time-standards";
 import AnalyticsHub from "@/pages/analytics";
 import FinancialIntelligence from "@/pages/analytics/financial";
 import RelayBuilder from "@/pages/analytics/relay";
@@ -52,6 +55,7 @@ function Router() {
   return (
     <Layout>
       <LaunchModal />
+      <OfflineBanner />
       <Switch>
         <Route path="/" component={Dashboard} />
 
@@ -71,6 +75,7 @@ function Router() {
         <Route path="/workouts/:id" component={WorkoutDetail} />
         <Route path="/workouts" component={Workouts} />
 
+        <Route path="/billing/payment-plans" component={PaymentPlans} />
         <Route path="/billing/new" component={NewInvoice} />
         <Route path="/billing" component={Billing} />
 
@@ -84,6 +89,7 @@ function Router() {
         <Route path="/timing" component={TimingConsole} />
         <Route path="/records" component={RecordsPage} />
         <Route path="/groups" component={GroupsPage} />
+        <Route path="/time-standards" component={TimeStandardsPage} />
 
         <Route path="/analytics/financial" component={FinancialIntelligence} />
         <Route path="/analytics/relay" component={RelayBuilder} />

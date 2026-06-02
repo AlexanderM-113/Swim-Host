@@ -20,7 +20,9 @@ const ALL_NAV: NavItem[] = [
   { name: "Teams", href: "/teams", icon: MapPin },
   { name: "Training Groups", href: "/groups", icon: Layers },
   { name: "Club Records", href: "/records", icon: Star },
+  { name: "Time Standards", href: "/time-standards", icon: Trophy },
   { name: "Billing", href: "/billing", icon: ReceiptText },
+  { name: "Payment Plans", href: "/billing/payment-plans", icon: ReceiptText },
 
   { name: "Workouts", href: "/workouts", icon: Dumbbell },
 
@@ -34,7 +36,7 @@ const ALL_NAV: NavItem[] = [
 
 const MODULE_NAV: Record<string, string[]> = {
   meet: ["/", "/meets", "/timing", "/reports", "/sdif", "/scoreboard", "/analytics", "/settings"],
-  team: ["/", "/athletes", "/teams", "/groups", "/records", "/billing", "/reports", "/analytics", "/settings"],
+  team: ["/", "/athletes", "/teams", "/groups", "/records", "/time-standards", "/billing", "/billing/payment-plans", "/reports", "/analytics", "/settings"],
   workout: ["/", "/workouts", "/athletes", "/groups", "/analytics", "/settings"],
 };
 
@@ -47,7 +49,7 @@ const MODULE_SECTIONS: Record<string, { label: string; hrefs: string[] }[]> = {
   ],
   team: [
     { label: "Roster", hrefs: ["/athletes", "/teams", "/groups"] },
-    { label: "Records & Finance", hrefs: ["/records", "/billing"] },
+    { label: "Records & Finance", hrefs: ["/records", "/time-standards", "/billing", "/billing/payment-plans"] },
     { label: "Tools", hrefs: ["/reports"] },
     { label: "Analytics & AI", hrefs: ["/analytics"] },
     { label: "System", hrefs: ["/settings"] },

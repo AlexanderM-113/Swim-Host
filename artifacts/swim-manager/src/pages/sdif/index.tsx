@@ -415,7 +415,7 @@ function ExportTab() {
   const { data: meets } = useListMeets();
   const [selectedMeet, setSelectedMeet] = useState("");
   const [exportType, setExportType] = useState<"entries" | "results" | "both">("entries");
-  const [fileFormat, setFileFormat] = useState<"hy3" | "cl2">("hy3");
+  const [fileFormat, setFileFormat] = useState<"sd3" | "hy3" | "cl2">("sd3");
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
@@ -506,8 +506,9 @@ function ExportTab() {
             <Download className="h-5 w-5 text-primary" /> Export SDIF File
           </CardTitle>
           <CardDescription>
-            Export meet entries or results as a standard SDIF file (.hy3 or .cl2) compatible with
+            Export meet entries or results as a standard SDIF file (.sd3, .hy3, or .cl2) compatible with
             Hy-Tek Meet Manager, Colorado Timing, and other USA Swimming software.
+            <span className="ml-1 font-medium text-primary">.sd3 is the recommended modern format.</span>
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -546,6 +547,7 @@ function ExportTab() {
               <Select value={fileFormat} onValueChange={(v) => setFileFormat(v as any)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="sd3">.sd3 — SDIF v3 (recommended)</SelectItem>
                   <SelectItem value="hy3">.hy3 — Hy-Tek Meet Manager</SelectItem>
                   <SelectItem value="cl2">.cl2 — Colorado Timing System</SelectItem>
                 </SelectContent>
@@ -610,9 +612,9 @@ function ExportTab() {
             <div>
               <h4 className="font-semibold mb-2">Compatible With</h4>
               <ul className="space-y-1 text-muted-foreground">
+                <li>✓ SD3 / SDIF v3.0 standard (.sd3)</li>
                 <li>✓ Hy-Tek Meet Manager (.hy3)</li>
                 <li>✓ Colorado Timing System (.cl2)</li>
-                <li>✓ USA Swimming SDIF v3.0 standard</li>
                 <li>✓ Team Manager / Team Unify</li>
                 <li>✓ Swimtopia, Meet Mobile</li>
               </ul>
@@ -713,9 +715,9 @@ export default function SDIFPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">SDIF / Data Exchange</h1>
+        <h1 className="text-3xl font-bold tracking-tight">SD3 / SDIF Data Exchange</h1>
         <p className="text-muted-foreground">
-          Import and export swimming meet data in standard SDIF format (.hy3, .cl2) and download the app.
+          Import and export meet data in SD3 / SDIF format (.sd3, .hy3, .cl2) — compatible with Hy-Tek, Colorado Timing, and USA Swimming tools.
         </p>
       </div>
 

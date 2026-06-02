@@ -12,12 +12,16 @@ export async function runBackup(): Promise<{ success: boolean; error?: string }>
   };
 
   try {
-    const res = await fetch(settings.backupUrl, {
+    // Route through the API server to avoid CORS issues with external webhook URLs
+    const res = await fetch("/api/backup/push", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ url: settings.backupUrl, payload }),
     });
-    if (!res.ok) throw new Error(`Server responded ${res.status} ${res.statusText}`);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error ?? `Server responded ${res.status}`);
+    }
     writeSettings({ ...settings, lastBackupAt: new Date().toISOString(), lastBackupStatus: "success" });
     window.dispatchEvent(new Event("swimmanager:backup"));
     return { success: true };

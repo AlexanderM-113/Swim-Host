@@ -24,6 +24,11 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 
+const TRAINING_GROUPS = [
+  "Elite", "Senior", "Junior", "Age Group A", "Age Group B",
+  "Developmental", "Recreational", "Masters",
+];
+
 const athleteSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
@@ -32,8 +37,10 @@ const athleteSchema = z.object({
   teamId: z.coerce.number().min(1, "Team is required"),
   idNumber: z.string().optional(),
   idFormat: z.string().optional(),
+  trainingGroup: z.string().optional(),
   phone: z.string().optional(),
   email: z.string().email("Invalid email").or(z.literal("")),
+  website: z.string().url("Invalid URL — include https://").or(z.literal("")).optional(),
   parentName: z.string().optional(),
   parentPhone: z.string().optional(),
   parentEmail: z.string().email("Invalid email").or(z.literal("")),
@@ -56,6 +63,7 @@ export default function NewAthlete() {
       lastName: "",
       gender: "M",
       email: "",
+      website: "",
       parentEmail: "",
     },
   });
@@ -64,7 +72,7 @@ export default function NewAthlete() {
     createAthlete.mutate(
       { data: { ...data, active: true } as any },
       {
-        onSuccess: (athlete) => {
+        onSuccess: () => {
           toast({
             title: "Athlete created",
             description: "Successfully added the new athlete.",
@@ -181,12 +189,35 @@ export default function NewAthlete() {
               />
               <FormField
                 control={form.control}
+                name="trainingGroup"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Training Group</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select group (optional)" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="">— None —</SelectItem>
+                        {TRAINING_GROUPS.map((g) => (
+                          <SelectItem key={g} value={g}>{g}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
                 name="idNumber"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Registration ID</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g. USAS ID" {...field} />
+                      <Input placeholder="e.g. USA Swimming ID" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -197,17 +228,121 @@ export default function NewAthlete() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Medical & Notes</CardTitle>
+              <CardTitle>Contact Information</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
                 control={form.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Phone</FormLabel>
+                    <FormControl>
+                      <Input placeholder="+1 555-000-0000" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input type="email" placeholder="athlete@example.com" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="website"
+                render={({ field }) => (
+                  <FormItem className="md:col-span-2">
+                    <FormLabel>Personal Website (optional)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="https://athleteprofile.com" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="md:col-span-2 border-t pt-4">
+                <p className="text-sm font-semibold text-muted-foreground mb-4">Parent / Guardian</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField
+                    control={form.control}
+                    name="parentName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Parent / Guardian Name</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Jane Doe" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="parentPhone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Parent Phone</FormLabel>
+                        <FormControl>
+                          <Input placeholder="+1 555-000-0001" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="parentEmail"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Parent Email</FormLabel>
+                        <FormControl>
+                          <Input type="email" placeholder="parent@example.com" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Medical & Notes</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 gap-6">
+              <FormField
+                control={form.control}
                 name="healthNotes"
                 render={({ field }) => (
-                  <FormItem className="col-span-2">
+                  <FormItem>
                     <FormLabel>Health Notes / Allergies</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Any medical conditions..." {...field} />
+                      <Textarea placeholder="Any medical conditions, allergies, or emergency information..." {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>General Notes</FormLabel>
+                    <FormControl>
+                      <Textarea placeholder="Any additional notes about this athlete..." {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

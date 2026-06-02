@@ -41,6 +41,8 @@ export interface Athlete {
   idFormat?: string;
   phone?: string;
   email?: string;
+  website?: string;
+  trainingGroup?: string;
   parentName?: string;
   parentPhone?: string;
   parentEmail?: string;
@@ -171,6 +173,35 @@ export interface Invoice {
   dueDate?: string;
   status: string;
   description?: string;
+  invoiceType?: string;
+  createdAt: string;
+}
+
+export interface PaymentPlan {
+  id: number;
+  athleteId?: number;
+  athleteName?: string;
+  planName: string;
+  amount: number;
+  frequency: "monthly" | "quarterly" | "yearly" | "weekly";
+  startDate: string;
+  nextDueDate: string;
+  status: "active" | "paused" | "cancelled";
+  description?: string;
+  createdAt: string;
+}
+
+export interface TimeStandard {
+  id: number;
+  name: string;
+  course: string;
+  gender: string;
+  ageMin: number;
+  ageMax: number;
+  distance: number;
+  stroke: string;
+  cutTime: number;
+  tier: string;
   createdAt: string;
 }
 
@@ -211,8 +242,70 @@ interface AppStore {
   sessions: Session[];
   workouts: Workout[];
   invoices: Invoice[];
+  paymentPlans: PaymentPlan[];
+  timeStandards: TimeStandard[];
   club: Club;
 }
+
+const SAMPLE_WORKOUTS: Workout[] = [
+  {
+    id: 1,
+    name: "Aerobic Base Builder",
+    date: new Date().toISOString().split("T")[0],
+    focus: "Aerobic",
+    sets: JSON.stringify([
+      { setOrder: 1, repetitions: 1, distance: 400, stroke: "Freestyle", description: "Warm-up easy freestyle", restInterval: "30s", intensity: "Easy" },
+      { setOrder: 2, repetitions: 4, distance: 100, stroke: "Individual Medley", description: "IM drill work, focus on turns", restInterval: "20s", intensity: "Moderate" },
+      { setOrder: 3, repetitions: 8, distance: 100, stroke: "Freestyle", description: "Main set — descend pace each 100", restInterval: "15s", intensity: "Moderate-Hard" },
+      { setOrder: 4, repetitions: 4, distance: 50, stroke: "Backstroke", description: "Cool-down, relaxed backstroke", restInterval: "30s", intensity: "Easy" },
+    ]),
+    notes: "Focus on steady aerobic effort. Keep stroke rate controlled.",
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 2,
+    name: "Sprint Power Session",
+    date: new Date().toISOString().split("T")[0],
+    focus: "Speed",
+    sets: JSON.stringify([
+      { setOrder: 1, repetitions: 1, distance: 300, stroke: "Freestyle", description: "Warm-up with build last 100", restInterval: "45s", intensity: "Easy" },
+      { setOrder: 2, repetitions: 6, distance: 50, stroke: "Freestyle", description: "Dive starts, full sprint — race pace", restInterval: "60s", intensity: "Max" },
+      { setOrder: 3, repetitions: 4, distance: 25, stroke: "Butterfly", description: "Fly explosions off the wall", restInterval: "45s", intensity: "Max" },
+      { setOrder: 4, repetitions: 1, distance: 200, stroke: "Freestyle", description: "Easy cool-down", restInterval: "", intensity: "Easy" },
+    ]),
+    notes: "Full rest between reps. Quality over quantity. Time every sprint.",
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 3,
+    name: "Dryland Strength Training",
+    date: new Date().toISOString().split("T")[0],
+    focus: "Strength",
+    sets: JSON.stringify([
+      { setOrder: 1, repetitions: 3, distance: 0, stroke: "N/A", description: "Push-ups — 20 reps each set", restInterval: "60s", intensity: "Moderate" },
+      { setOrder: 2, repetitions: 3, distance: 0, stroke: "N/A", description: "Pull-ups / Lat pulldowns — 10 reps", restInterval: "90s", intensity: "Hard" },
+      { setOrder: 3, repetitions: 3, distance: 0, stroke: "N/A", description: "Plank hold — 45 seconds each", restInterval: "30s", intensity: "Moderate" },
+      { setOrder: 4, repetitions: 3, distance: 0, stroke: "N/A", description: "Squat jumps — 15 reps explosive", restInterval: "60s", intensity: "Hard" },
+      { setOrder: 5, repetitions: 2, distance: 0, stroke: "N/A", description: "Resistance band freestyle pulls — 20 each arm", restInterval: "30s", intensity: "Moderate" },
+    ]),
+    notes: "Dryland session. Focus on swimming-specific muscle groups — lats, core, legs.",
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 4,
+    name: "Threshold Training",
+    date: new Date().toISOString().split("T")[0],
+    focus: "Threshold",
+    sets: JSON.stringify([
+      { setOrder: 1, repetitions: 1, distance: 500, stroke: "Mixed", description: "Warm-up 100 free/100 back/100 breast/100 fly/100 free", restInterval: "60s", intensity: "Easy" },
+      { setOrder: 2, repetitions: 3, distance: 300, stroke: "Freestyle", description: "Threshold pace — hold consistent split across all 300s", restInterval: "30s", intensity: "Hard" },
+      { setOrder: 3, repetitions: 6, distance: 50, stroke: "Freestyle", description: "Kick-only with board, build each", restInterval: "20s", intensity: "Moderate" },
+      { setOrder: 4, repetitions: 1, distance: 200, stroke: "Freestyle", description: "Cool-down easy", restInterval: "", intensity: "Easy" },
+    ]),
+    notes: "Threshold = comfortably hard. Should be able to talk in short sentences.",
+    createdAt: new Date().toISOString(),
+  },
+];
 
 const DEFAULT_STORE: AppStore = {
   meets: [],
@@ -223,8 +316,10 @@ const DEFAULT_STORE: AppStore = {
   heats: [],
   results: [],
   sessions: [],
-  workouts: [],
+  workouts: SAMPLE_WORKOUTS,
   invoices: [],
+  paymentPlans: [],
+  timeStandards: [],
   club: { id: 1, name: "My Swimming Club" },
 };
 
@@ -251,7 +346,13 @@ export function readStore(): AppStore {
   try {
     const raw = localStorage.getItem(STORE_KEY);
     if (!raw) return DEFAULT_STORE;
-    return { ...DEFAULT_STORE, ...JSON.parse(raw) };
+    const parsed = JSON.parse(raw);
+    const merged = { ...DEFAULT_STORE, ...parsed };
+    // Back-fill sample workouts if none exist (new installs that had empty default)
+    if (!parsed.workouts || parsed.workouts.length === 0) {
+      merged.workouts = SAMPLE_WORKOUTS;
+    }
+    return merged;
   } catch {
     return DEFAULT_STORE;
   }
