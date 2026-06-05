@@ -55,7 +55,7 @@ function calcAge(dob: string | null | undefined): string {
   return String(age);
 }
 
-router.get("/meets/:meetId/psych-sheet", async (req, res): Promise<void> => {
+router.get("/reports/meets/:meetId/psych-sheet", async (req, res): Promise<void> => {
   const meetId = parseInt(req.params.meetId);
   const [meet] = await db.select().from(meetsTable).where(eq(meetsTable.id, meetId)).limit(1);
   if (!meet) { res.status(404).json({ error: "Meet not found" }); return; }
@@ -86,7 +86,7 @@ router.get("/meets/:meetId/psych-sheet", async (req, res): Promise<void> => {
   res.json({ meet, events: eventsOut });
 });
 
-router.get("/meets/:meetId/heat-sheet", async (req, res): Promise<void> => {
+router.get("/reports/meets/:meetId/heat-sheet", async (req, res): Promise<void> => {
   const meetId = parseInt(req.params.meetId);
   const [meet] = await db.select().from(meetsTable).where(eq(meetsTable.id, meetId)).limit(1);
   if (!meet) { res.status(404).json({ error: "Meet not found" }); return; }
@@ -119,7 +119,7 @@ router.get("/meets/:meetId/heat-sheet", async (req, res): Promise<void> => {
   res.json({ meet, events: eventsOut });
 });
 
-router.get("/meets/:meetId/results-report", async (req, res): Promise<void> => {
+router.get("/reports/meets/:meetId/results-report", async (req, res): Promise<void> => {
   const meetId = parseInt(req.params.meetId);
   const [meet] = await db.select().from(meetsTable).where(eq(meetsTable.id, meetId)).limit(1);
   if (!meet) { res.status(404).json({ error: "Meet not found" }); return; }
@@ -161,7 +161,7 @@ router.get("/meets/:meetId/results-report", async (req, res): Promise<void> => {
   res.json({ meet, events: eventsOut });
 });
 
-router.get("/meets/:meetId/dq-report", async (req, res): Promise<void> => {
+router.get("/reports/meets/:meetId/dq-report", async (req, res): Promise<void> => {
   const meetId = parseInt(req.params.meetId);
   const [meet] = await db.select().from(meetsTable).where(eq(meetsTable.id, meetId)).limit(1);
   if (!meet) { res.status(404).json({ error: "Meet not found" }); return; }
@@ -194,7 +194,7 @@ router.get("/meets/:meetId/dq-report", async (req, res): Promise<void> => {
   res.json({ meet, dqs });
 });
 
-router.get("/meets/:meetId/entry-list-by-team", async (req, res): Promise<void> => {
+router.get("/reports/meets/:meetId/entry-list-by-team", async (req, res): Promise<void> => {
   const meetId = parseInt(req.params.meetId);
   const [meet] = await db.select().from(meetsTable).where(eq(meetsTable.id, meetId)).limit(1);
   if (!meet) { res.status(404).json({ error: "Meet not found" }); return; }
@@ -240,7 +240,7 @@ router.get("/meets/:meetId/entry-list-by-team", async (req, res): Promise<void> 
   res.json({ meet, teams: teamGroups });
 });
 
-router.get("/meets/:meetId/award-counts", async (req, res): Promise<void> => {
+router.get("/reports/meets/:meetId/award-counts", async (req, res): Promise<void> => {
   const meetId = parseInt(req.params.meetId);
   const [meet] = await db.select().from(meetsTable).where(eq(meetsTable.id, meetId)).limit(1);
   if (!meet) { res.status(404).json({ error: "Meet not found" }); return; }
@@ -278,7 +278,7 @@ router.get("/meets/:meetId/award-counts", async (req, res): Promise<void> => {
   res.json({ meet, teamAwards });
 });
 
-router.get("/athletes/:athleteId/full-report", async (req, res): Promise<void> => {
+router.get("/reports/athletes/:athleteId/full-report", async (req, res): Promise<void> => {
   const athleteId = parseInt(req.params.athleteId);
   const [athlete] = await db.select({
     id: athletesTable.id,
@@ -323,7 +323,7 @@ router.get("/athletes/:athleteId/full-report", async (req, res): Promise<void> =
   res.json({ athlete, entries, invoices });
 });
 
-router.get("/teams/:teamId/full-report", async (req, res): Promise<void> => {
+router.get("/reports/teams/:teamId/full-report", async (req, res): Promise<void> => {
   const teamId = parseInt(req.params.teamId);
   const [team] = await db.select().from(teamsTable).where(eq(teamsTable.id, teamId)).limit(1);
   if (!team) { res.status(404).json({ error: "Team not found" }); return; }
@@ -335,7 +335,7 @@ router.get("/teams/:teamId/full-report", async (req, res): Promise<void> => {
   res.json({ team, athletes });
 });
 
-router.get("/billing/full-report", async (req, res): Promise<void> => {
+router.get("/reports/billing/full-report", async (req, res): Promise<void> => {
   const invoices = await db.select({
     id: invoicesTable.id,
     athleteId: invoicesTable.athleteId,
@@ -362,7 +362,7 @@ router.get("/billing/full-report", async (req, res): Promise<void> => {
   })));
 });
 
-router.get("/meets/:meetId/split-sheet", async (req, res): Promise<void> => {
+router.get("/reports/meets/:meetId/split-sheet", async (req, res): Promise<void> => {
   const meetId = parseInt(req.params.meetId);
   const [meet] = await db.select().from(meetsTable).where(eq(meetsTable.id, meetId)).limit(1);
   if (!meet) { res.status(404).json({ error: "Meet not found" }); return; }
@@ -398,7 +398,7 @@ router.get("/meets/:meetId/split-sheet", async (req, res): Promise<void> => {
   res.json({ meet, events: eventsOut });
 });
 
-router.post("/scratch-requests", async (req, res): Promise<void> => {
+router.post("/reports/scratch-requests", async (req, res): Promise<void> => {
   const { fullName, dob, eventNumber, eventName, reason, signature, timestamp, meetId } = req.body;
   req.log.info({ fullName, eventNumber, meetId, timestamp }, "Scratch request received");
   res.status(201).json({
