@@ -398,8 +398,6 @@ router.get("/meets/:meetId/split-sheet", async (req, res): Promise<void> => {
   res.json({ meet, events: eventsOut });
 });
 
-export default router;
-
 router.post("/scratch-requests", async (req, res): Promise<void> => {
   const { fullName, dob, eventNumber, eventName, reason, signature, timestamp, meetId } = req.body;
   req.log.info({ fullName, eventNumber, meetId, timestamp }, "Scratch request received");
@@ -409,3 +407,5 @@ router.post("/scratch-requests", async (req, res): Promise<void> => {
     data: { fullName, eventNumber, eventName, meetId, timestamp: timestamp ?? new Date().toISOString() },
   });
 });
+
+export default router;
