@@ -203,14 +203,14 @@ export default function NewAthlete() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Training Group</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                    <Select onValueChange={(val) => field.onChange(val === "none" ? undefined : val)} value={field.value ?? "none"}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select group (optional)" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">— None —</SelectItem>
+                        <SelectItem value="none">— None —</SelectItem>
                         {TRAINING_GROUPS.map((g) => (
                           <SelectItem key={g} value={g}>{g}</SelectItem>
                         ))}
