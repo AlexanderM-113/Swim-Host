@@ -3,11 +3,12 @@ import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { startAutoBackup } from "@/lib/backup-service";
+import { useToast } from "@/hooks/use-toast";
 import { Layout } from "@/components/layout";
 import { ModuleProvider } from "@/contexts/module-context";
 import { LaunchModal } from "@/components/launch-modal";
 import { OfflineBanner } from "@/components/offline-banner";
+import { ErrorBoundary } from "@/components/error-boundary";
 import NotFound from "@/pages/not-found";
 
 import Dashboard from "@/pages/dashboard";
@@ -35,7 +36,7 @@ import TimingConsole from "@/pages/timing";
 import RecordsPage from "@/pages/records";
 import GroupsPage from "@/pages/groups";
 import TimeStandardsPage from "@/pages/time-standards";
-import AnalyticsHub from "@/pages/analytics";
+import SmartFeaturesHub from "@/pages/analytics";
 import FinancialIntelligence from "@/pages/analytics/financial";
 import RelayBuilder from "@/pages/analytics/relay";
 import AthleteReadiness from "@/pages/analytics/readiness";
@@ -50,6 +51,40 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// In-memory log ring buffer (last 100 entries)
+const logBuffer: { level: string; message: string; ts: string }[] = [];
+export function getLogBuffer() { return [...logBuffer]; }
+
+function addLog(level: string, message: string) {
+  logBuffer.push({ level, message, ts: new Date().toISOString() });
+  if (logBuffer.length > 100) logBuffer.shift();
+}
+
+function GlobalErrorHandler() {
+  const { toast } = useToast();
+
+  useEffect(() => {
+    function handleUnhandledRejection(ev: PromiseRejectionEvent) {
+      const msg = ev.reason instanceof Error ? ev.reason.message : String(ev.reason ?? "Unknown error");
+      console.error("[unhandledRejection]", ev.reason);
+      addLog("error", msg);
+      toast({ title: "Unexpected error", description: msg.substring(0, 120), variant: "destructive" });
+    }
+    function handleError(ev: ErrorEvent) {
+      console.error("[onerror]", ev.error ?? ev.message);
+      addLog("error", ev.message ?? "Script error");
+    }
+    window.addEventListener("unhandledrejection", handleUnhandledRejection);
+    window.addEventListener("error", handleError);
+    return () => {
+      window.removeEventListener("unhandledrejection", handleUnhandledRejection);
+      window.removeEventListener("error", handleError);
+    };
+  }, [toast]);
+
+  return null;
+}
 
 function Router() {
   return (
@@ -96,7 +131,7 @@ function Router() {
         <Route path="/analytics/readiness" component={AthleteReadiness} />
         <Route path="/analytics/video" component={VideoAnalysis} />
         <Route path="/analytics/technique" component={TechniqueAnalytics} />
-        <Route path="/analytics" component={AnalyticsHub} />
+        <Route path="/analytics" component={SmartFeaturesHub} />
 
         <Route component={NotFound} />
       </Switch>
@@ -105,17 +140,16 @@ function Router() {
 }
 
 function App() {
-  useEffect(() => {
-    startAutoBackup();
-  }, []);
-
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <ModuleProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <Router />
-          </WouterRouter>
+          <ErrorBoundary>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <GlobalErrorHandler />
+              <Router />
+            </WouterRouter>
+          </ErrorBoundary>
         </ModuleProvider>
         <Toaster />
       </TooltipProvider>

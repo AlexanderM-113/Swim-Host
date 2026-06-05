@@ -1,19 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { useGetClub, useUpdateClub, useGetSettings, useUpdateSettings, exportAllData, importAllData, clearAllData } from "@/lib/local-store";
-import { runBackup, restartAutoBackup } from "@/lib/backup-service";
+import { useGetClub, useUpdateClub, useGetSettings, exportAllData, importAllData, clearAllData } from "@/lib/local-store";
+import { exportBackupJson } from "@/lib/backup-service";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { CheckCircle2, XCircle, Upload, Download, Trash2, RefreshCw, Server, Database, Shield, ImageIcon, X } from "lucide-react";
+import { CheckCircle2, Upload, Download, Trash2, RefreshCw, Server, Database, Shield, ImageIcon, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 const LOGO_KEY = "swimmanager:clubLogo";
@@ -32,16 +30,10 @@ const clubSchema = z.object({
   website: z.string().url().or(z.literal("")).optional(),
 });
 
-const backupSchema = z.object({
-  backupUrl: z.string().url("Must be a valid URL").or(z.literal("")),
-  backupIntervalMinutes: z.coerce.number().min(0),
-});
-
 export default function Settings() {
   const { data: club, isLoading } = useGetClub();
   const { data: settings } = useGetSettings();
   const updateClub = useUpdateClub();
-  const updateSettings = useUpdateSettings();
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [isBackingUp, setIsBackingUp] = useState(false);
@@ -52,11 +44,6 @@ export default function Settings() {
   const clubForm = useForm<z.infer<typeof clubSchema>>({
     resolver: zodResolver(clubSchema),
     defaultValues: { name: "", abbreviation: "", lsc: "", email: "" },
-  });
-
-  const backupForm = useForm<z.infer<typeof backupSchema>>({
-    resolver: zodResolver(backupSchema),
-    defaultValues: { backupUrl: "", backupIntervalMinutes: 30 },
   });
 
   useEffect(() => {
@@ -78,15 +65,6 @@ export default function Settings() {
   }, [club]);
 
   useEffect(() => {
-    if (settings) {
-      backupForm.reset({
-        backupUrl: settings.backupUrl ?? "",
-        backupIntervalMinutes: settings.backupIntervalMinutes ?? 30,
-      });
-    }
-  }, [settings]);
-
-  useEffect(() => {
     const handler = () => queryClient.invalidateQueries({ queryKey: ["settings"] });
     window.addEventListener("swimmanager:backup", handler);
     return () => window.removeEventListener("swimmanager:backup", handler);
@@ -102,32 +80,15 @@ export default function Settings() {
     );
   }
 
-  function onBackupSubmit(data: z.infer<typeof backupSchema>) {
-    updateSettings.mutate(
-      { backupUrl: data.backupUrl, backupIntervalMinutes: data.backupIntervalMinutes },
-      {
-        onSuccess: () => {
-          restartAutoBackup();
-          toast({
-            title: "Backup settings saved",
-            description: data.backupUrl
-              ? `Auto-backup every ${data.backupIntervalMinutes} min`
-              : "Auto-backup disabled",
-          });
-        },
-      }
-    );
-  }
-
   async function handleManualBackup() {
     setIsBackingUp(true);
-    const result = await runBackup();
-    setIsBackingUp(false);
-    queryClient.invalidateQueries({ queryKey: ["settings"] });
-    if (result.success) {
-      toast({ title: "Backup successful", description: "Data sent to your backup server." });
-    } else {
-      toast({ title: "Backup failed", description: result.error, variant: "destructive" });
+    try {
+      exportBackupJson();
+      toast({ title: "Backup downloaded", description: "JSON backup file saved to your downloads." });
+    } catch {
+      toast({ title: "Backup failed", variant: "destructive" });
+    } finally {
+      setIsBackingUp(false);
     }
   }
 
@@ -314,96 +275,36 @@ export default function Settings() {
 
       <Separator />
 
-      <Form {...backupForm}>
-        <form onSubmit={backupForm.handleSubmit(onBackupSubmit)} className="space-y-4">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <Server className="h-5 w-5" />
-                <CardTitle>Remote Backup</CardTitle>
-              </div>
-              <CardDescription>
-                Periodically POST your full data as JSON to any URL you control — your own server, a webhook relay (webhook.site, Pipedream, n8n, Make), Zapier, etc.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {settings?.lastBackupAt && (
-                <div className="flex items-center gap-2 text-sm">
-                  {settings.lastBackupStatus === "success" ? (
-                    <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  ) : (
-                    <XCircle className="h-4 w-4 text-red-500" />
-                  )}
-                  <span className="text-muted-foreground">
-                    Last backup: {new Date(settings.lastBackupAt).toLocaleString()}
-                  </span>
-                  <Badge
-                    variant={settings.lastBackupStatus === "success" ? "default" : "destructive"}
-                    className="text-xs"
-                  >
-                    {settings.lastBackupStatus}
-                  </Badge>
-                </div>
-              )}
-
-              <FormField control={backupForm.control} name="backupUrl" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Backup URL</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="https://your-server.com/backup  or  https://webhook.site/..."
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Receives a POST with JSON body:{" "}
-                    <code className="bg-muted px-1 rounded text-xs">
-                      {"{ timestamp, store: { meets, athletes, teams, events, entries, results, ... } }"}
-                    </code>
-                  </p>
-                </FormItem>
-              )} />
-
-              <FormField control={backupForm.control} name="backupIntervalMinutes" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Auto-backup Interval</FormLabel>
-                  <Select onValueChange={(v) => field.onChange(Number(v))} value={String(field.value)}>
-                    <FormControl>
-                      <SelectTrigger className="w-52">
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="0">Disabled</SelectItem>
-                      <SelectItem value="5">Every 5 minutes</SelectItem>
-                      <SelectItem value="10">Every 10 minutes</SelectItem>
-                      <SelectItem value="15">Every 15 minutes</SelectItem>
-                      <SelectItem value="30">Every 30 minutes</SelectItem>
-                      <SelectItem value="60">Every hour</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </FormItem>
-              )} />
-            </CardContent>
-          </Card>
-
-          <div className="flex items-center justify-between">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleManualBackup}
-              disabled={isBackingUp || !settings?.backupUrl}
-            >
-              <RefreshCw className={`mr-2 h-4 w-4 ${isBackingUp ? "animate-spin" : ""}`} />
-              {isBackingUp ? "Backing up..." : "Backup Now"}
-            </Button>
-            <Button type="submit" disabled={updateSettings.isPending}>
-              {updateSettings.isPending ? "Saving..." : "Save Backup Settings"}
-            </Button>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Server className="h-5 w-5" />
+            <CardTitle>Backup</CardTitle>
           </div>
-        </form>
-      </Form>
+          <CardDescription>
+            Download a complete JSON snapshot of all your SwimManager data. Restore it at any time from the Data Management section below.
+            SwimManager works fully offline — all data lives in your browser only.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {settings?.lastBackupAt && (
+            <div className="flex items-center gap-2 text-sm mb-4">
+              <CheckCircle2 className="h-4 w-4 text-green-500" />
+              <span className="text-muted-foreground">
+                Last backup: {new Date(settings.lastBackupAt).toLocaleString()}
+              </span>
+            </div>
+          )}
+          <Button
+            variant="outline"
+            onClick={handleManualBackup}
+            disabled={isBackingUp}
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${isBackingUp ? "animate-spin" : ""}`} />
+            {isBackingUp ? "Downloading..." : "Download Backup Now"}
+          </Button>
+        </CardContent>
+      </Card>
 
       <Separator />
 

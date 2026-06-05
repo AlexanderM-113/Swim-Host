@@ -34,16 +34,16 @@ const athleteSchema = z.object({
   lastName: z.string().min(1, "Last name is required"),
   gender: z.string().min(1, "Gender is required"),
   dateOfBirth: z.string().optional(),
-  teamId: z.coerce.number().min(1, "Team is required"),
+  teamId: z.coerce.number().optional(),
   idNumber: z.string().optional(),
   idFormat: z.string().optional(),
   trainingGroup: z.string().optional(),
   phone: z.string().optional(),
-  email: z.string().email("Invalid email").or(z.literal("")),
+  email: z.string().email("Invalid email").or(z.literal("")).optional(),
   website: z.string().url("Invalid URL — include https://").or(z.literal("")).optional(),
   parentName: z.string().optional(),
   parentPhone: z.string().optional(),
-  parentEmail: z.string().email("Invalid email").or(z.literal("")),
+  parentEmail: z.string().email("Invalid email").or(z.literal("")).optional(),
   healthNotes: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -69,8 +69,13 @@ export default function NewAthlete() {
   });
 
   function onSubmit(data: AthleteFormValues) {
+    const payload: any = {
+      ...data,
+      active: true,
+      teamId: data.teamId && data.teamId > 0 ? data.teamId : undefined,
+    };
     createAthlete.mutate(
-      { data: { ...data, active: true } as any },
+      { data: payload },
       {
         onSuccess: () => {
           toast({
@@ -79,7 +84,8 @@ export default function NewAthlete() {
           });
           setLocation(`/athletes`);
         },
-        onError: () => {
+        onError: (err) => {
+          console.error("Create athlete error:", err);
           toast({
             title: "Error",
             description: "Failed to create athlete.",
@@ -170,14 +176,18 @@ export default function NewAthlete() {
                 name="teamId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Team</FormLabel>
-                    <Select onValueChange={(val) => field.onChange(Number(val))} defaultValue={field.value?.toString()}>
+                    <FormLabel>Team <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                    <Select
+                      onValueChange={(val) => field.onChange(val === "0" ? undefined : Number(val))}
+                      defaultValue={field.value?.toString() ?? "0"}
+                    >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select team" />
+                          <SelectValue placeholder="No team / Unattached" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
+                        <SelectItem value="0">— No team / Unattached —</SelectItem>
                         {teams?.map((t) => (
                           <SelectItem key={t.id} value={t.id.toString()}>{t.name}</SelectItem>
                         ))}

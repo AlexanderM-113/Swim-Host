@@ -74,50 +74,50 @@
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
 
-  /* Deep pool blue aesthetic - Light Mode */
-  --background: 210 33% 99%;
-  --foreground: 222 47% 11%;
-  
+  /* Aquatic cyan/blue theme — Light Mode */
+  --background: 195 30% 98%;
+  --foreground: 210 40% 10%;
+
   --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
-  --card-border: 214 32% 91%;
-  
+  --card-foreground: 210 40% 10%;
+  --card-border: 195 30% 88%;
+
   --popover: 0 0% 100%;
-  --popover-foreground: 222 47% 11%;
-  --popover-border: 214 32% 91%;
-  
-  --primary: 205 90% 35%; /* Aquatic Blue */
+  --popover-foreground: 210 40% 10%;
+  --popover-border: 195 30% 88%;
+
+  --primary: 195 80% 40%;
   --primary-foreground: 0 0% 100%;
-  
-  --secondary: 217 33% 17%; /* Deep Navy */
+
+  --secondary: 210 50% 18%;
   --secondary-foreground: 0 0% 100%;
-  
-  --muted: 210 40% 96.1%;
-  --muted-foreground: 215.4 16.3% 46.9%;
-  
-  --accent: 15 85% 55%; /* Lane Line Orange/Red */
+
+  --muted: 195 30% 94%;
+  --muted-foreground: 210 20% 46%;
+
+  --accent: 185 70% 45%;
   --accent-foreground: 0 0% 100%;
-  
+
   --destructive: 0 84.2% 60.2%;
   --destructive-foreground: 210 40% 98%;
 
-  --border: 214.3 31.8% 91.4%;
-  --input: 214.3 31.8% 91.4%;
-  --ring: 205 90% 35%;
+  --border: 195 25% 88%;
+  --input: 195 25% 88%;
+  --ring: 195 80% 40%;
 
-  --sidebar: 217 33% 17%;
-  --sidebar-foreground: 210 40% 96.1%;
-  --sidebar-border: 217 33% 15%;
-  --sidebar-primary: 205 90% 35%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 217 33% 25%;
-  --sidebar-accent-foreground: 210 40% 96.1%;
-  --sidebar-ring: 205 90% 35%;
+  --sidebar: 210 50% 16%;
+  --sidebar-foreground: 195 40% 94%;
+  --sidebar-border: 210 50% 13%;
+  --sidebar-primary: 195 80% 45%;
+  --sidebar-primary-foreground: 210 50% 10%;
+  --sidebar-accent: 210 50% 24%;
+  --sidebar-accent-foreground: 195 40% 94%;
+  --sidebar-ring: 195 80% 45%;
 
-  --chart-1: 205 90% 35%;
-  --chart-2: 15 85% 55%;
-  --chart-3: 175 70% 40%;
-  --chart-4: 217 33% 17%;
+  --chart-1: 195 80% 40%;
+  --chart-2: 185 70% 45%;
+  --chart-3: 15 85% 55%;
+  --chart-4: 210 50% 18%;
   --chart-5: 45 93% 47%;
 
   --app-font-sans: 'Inter', system-ui, sans-serif;
@@ -141,45 +141,45 @@
   --elevate-1: rgba(255,255,255, .04);
   --elevate-2: rgba(255,255,255, .09);
 
-  /* Cockpit dark mode */
-  --background: 222 47% 7%;
-  --foreground: 210 40% 98%;
+  /* Deep water dark mode */
+  --background: 210 50% 6%;
+  --foreground: 195 40% 96%;
 
-  --card: 222 47% 9%;
-  --card-foreground: 210 40% 98%;
-  --card-border: 217 33% 17%;
+  --card: 210 50% 8%;
+  --card-foreground: 195 40% 96%;
+  --card-border: 210 45% 15%;
 
-  --popover: 222 47% 9%;
-  --popover-foreground: 210 40% 98%;
-  --popover-border: 217 33% 17%;
+  --popover: 210 50% 8%;
+  --popover-foreground: 195 40% 96%;
+  --popover-border: 210 45% 15%;
 
-  --primary: 205 90% 45%;
-  --primary-foreground: 222 47% 11%;
+  --primary: 195 80% 50%;
+  --primary-foreground: 210 50% 10%;
 
-  --secondary: 217 33% 17%;
-  --secondary-foreground: 210 40% 98%;
+  --secondary: 210 50% 18%;
+  --secondary-foreground: 195 40% 96%;
 
-  --muted: 217 33% 17%;
-  --muted-foreground: 215 20.2% 65.1%;
+  --muted: 210 45% 14%;
+  --muted-foreground: 210 20% 60%;
 
-  --accent: 15 85% 55%;
-  --accent-foreground: 222 47% 11%;
+  --accent: 185 70% 50%;
+  --accent-foreground: 210 50% 10%;
 
   --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 210 40% 98%;
+  --destructive-foreground: 195 40% 96%;
 
-  --border: 217 33% 17%;
-  --input: 217 33% 17%;
-  --ring: 205 90% 45%;
+  --border: 210 45% 15%;
+  --input: 210 45% 15%;
+  --ring: 195 80% 50%;
 
-  --sidebar: 222 47% 5%;
-  --sidebar-foreground: 210 40% 98%;
-  --sidebar-border: 217 33% 17%;
-  --sidebar-primary: 205 90% 45%;
-  --sidebar-primary-foreground: 222 47% 11%;
-  --sidebar-accent: 217 33% 17%;
-  --sidebar-accent-foreground: 210 40% 98%;
-  --sidebar-ring: 205 90% 45%;
+  --sidebar: 210 55% 4%;
+  --sidebar-foreground: 195 40% 94%;
+  --sidebar-border: 210 50% 11%;
+  --sidebar-primary: 195 80% 50%;
+  --sidebar-primary-foreground: 210 50% 10%;
+  --sidebar-accent: 210 50% 16%;
+  --sidebar-accent-foreground: 195 40% 94%;
+  --sidebar-ring: 195 80% 50%;
 }
 
 @layer base {
@@ -190,4 +190,15 @@
 @layer utilities {
   input[type="search"]::-webkit-search-cancel-button { @apply hidden; }
   [contenteditable][data-placeholder]:empty::before { content: attr(data-placeholder); color: hsl(var(--muted-foreground)); pointer-events: none; }
+
+  /* Water-themed gradient utility classes */
+  .pool-gradient {
+    background: linear-gradient(135deg, hsl(195 80% 40% / 0.12), hsl(210 60% 50% / 0.08), hsl(180 70% 45% / 0.10));
+  }
+  .pool-hero {
+    background: linear-gradient(160deg, hsl(195 80% 35%), hsl(210 70% 25%));
+  }
+  .wave-border {
+    border-image: linear-gradient(90deg, hsl(195 80% 40%), hsl(180 70% 50%), hsl(195 80% 40%)) 1;
+  }
 }

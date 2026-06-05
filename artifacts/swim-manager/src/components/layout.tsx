@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import {
   Activity, Users, MapPin, Settings, ReceiptText, Trophy,
   FileText, Globe, Monitor, ArrowLeftRight, Timer, Star, Layers,
-  Dumbbell, Waves, LayoutGrid, BarChart3,
+  Dumbbell, Waves, LayoutGrid, Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useModule } from "@/contexts/module-context";
@@ -30,7 +30,7 @@ const ALL_NAV: NavItem[] = [
   { name: "SDIF / Import-Export", href: "/sdif", icon: ArrowLeftRight },
   { name: "Web Generator", href: "/webgen", icon: Globe },
   { name: "Scoreboard", href: "/scoreboard", icon: Monitor },
-  { name: "Analytics & AI", href: "/analytics", icon: BarChart3 },
+  { name: "Smart Features", href: "/analytics", icon: Sparkles },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
@@ -44,20 +44,20 @@ const MODULE_SECTIONS: Record<string, { label: string; hrefs: string[] }[]> = {
   meet: [
     { label: "Meet Management", hrefs: ["/meets", "/timing"] },
     { label: "Tools", hrefs: ["/reports", "/sdif", "/scoreboard"] },
-    { label: "Analytics & AI", hrefs: ["/analytics"] },
+    { label: "Smart Features", hrefs: ["/analytics"] },
     { label: "System", hrefs: ["/settings"] },
   ],
   team: [
     { label: "Roster", hrefs: ["/athletes", "/teams", "/groups"] },
     { label: "Records & Finance", hrefs: ["/records", "/time-standards", "/billing", "/billing/payment-plans"] },
     { label: "Tools", hrefs: ["/reports"] },
-    { label: "Analytics & AI", hrefs: ["/analytics"] },
+    { label: "Smart Features", hrefs: ["/analytics"] },
     { label: "System", hrefs: ["/settings"] },
   ],
   workout: [
     { label: "Training", hrefs: ["/workouts", "/groups"] },
     { label: "Athletes", hrefs: ["/athletes"] },
-    { label: "Analytics & AI", hrefs: ["/analytics"] },
+    { label: "Smart Features", hrefs: ["/analytics"] },
     { label: "System", hrefs: ["/settings"] },
   ],
 };
@@ -143,36 +143,48 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen flex bg-background text-foreground font-sans">
-      <aside className="w-64 bg-sidebar text-sidebar-foreground flex flex-col shrink-0 sticky top-0 h-screen border-r border-sidebar-border shadow-lg">
-        <div className="h-16 flex items-center px-5 border-b border-sidebar-border bg-sidebar">
-          <Waves className="h-5 w-5 text-cyan-400 mr-2 flex-shrink-0" />
-          <span className="font-black text-lg tracking-tight">
-            <span className="text-cyan-400 italic">SWIM</span>MANAGER<span className="text-sidebar-foreground/40 font-light ml-1 text-sm">PRO</span>
-          </span>
-        </div>
+      <aside
+        className="w-64 text-sidebar-foreground flex flex-col shrink-0 sticky top-0 h-screen border-r border-sidebar-border shadow-lg relative overflow-hidden"
+        style={{ background: "hsl(var(--sidebar))" }}
+      >
+        {/* Pool water background overlay */}
+        <div
+          className="absolute inset-0 opacity-[0.07] bg-cover bg-center pointer-events-none"
+          style={{ backgroundImage: "url('/pool-bg.jpg')" }}
+          aria-hidden="true"
+        />
 
-        {activeModule && (
-          <div className={cn("px-4 py-2 border-b border-sidebar-border/50 text-xs font-semibold flex items-center gap-2", MODULE_ACCENT[activeModule])}>
-            <LayoutGrid className="h-3 w-3" />
-            {MODULE_LABEL[activeModule]}
+        <div className="relative z-10 flex flex-col h-full">
+          <div className="h-16 flex items-center px-5 border-b border-sidebar-border">
+            <Waves className="h-5 w-5 text-cyan-400 mr-2 flex-shrink-0" />
+            <span className="font-black text-lg tracking-tight">
+              <span className="text-cyan-400 italic">SWIM</span>MANAGER<span className="text-sidebar-foreground/40 font-light ml-1 text-sm">PRO</span>
+            </span>
           </div>
-        )}
 
-        <nav className="flex-1 px-3 py-4 overflow-y-auto">
-          {renderNav()}
-        </nav>
+          {activeModule && (
+            <div className={cn("px-4 py-2 border-b border-sidebar-border/50 text-xs font-semibold flex items-center gap-2", MODULE_ACCENT[activeModule])}>
+              <LayoutGrid className="h-3 w-3" />
+              {MODULE_LABEL[activeModule]}
+            </div>
+          )}
 
-        <div className="px-3 pb-3 border-t border-sidebar-border pt-3 space-y-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent text-xs"
-            onClick={() => setShowLauncher(true)}
-          >
-            <LayoutGrid className="h-3.5 w-3.5 mr-2" />
-            Switch Module
-          </Button>
-          <p className="text-xs text-sidebar-foreground/30 text-center px-2">SwimManager Pro v1.0</p>
+          <nav className="flex-1 px-3 py-4 overflow-y-auto">
+            {renderNav()}
+          </nav>
+
+          <div className="px-3 pb-3 border-t border-sidebar-border pt-3 space-y-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent text-xs"
+              onClick={() => setShowLauncher(true)}
+            >
+              <LayoutGrid className="h-3.5 w-3.5 mr-2" />
+              Switch Module
+            </Button>
+            <p className="text-xs text-sidebar-foreground/30 text-center px-2">SwimManager Pro v1.0</p>
+          </div>
         </div>
       </aside>
 

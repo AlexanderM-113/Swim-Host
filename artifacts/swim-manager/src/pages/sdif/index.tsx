@@ -234,7 +234,7 @@ function ImportTab() {
             <Upload className="h-5 w-5 text-primary" /> Import SDIF File
           </CardTitle>
           <CardDescription>
-            Import meet entries or results from a Hy-Tek (.hy3) or Colorado Timing (.cl2) SDIF file.
+            Import meet entries or results from an SDIF v3.0 (.sd3) file.
             Teams, athletes, and entries will be created automatically.
           </CardDescription>
         </CardHeader>
@@ -245,15 +245,15 @@ function ImportTab() {
           >
             <FileText className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
             <p className="font-medium">
-              {fileName ? fileName : "Click to select or drop a .hy3 / .cl2 file"}
+              {fileName ? fileName : "Click to select or drop a .sd3 file"}
             </p>
             <p className="text-sm text-muted-foreground mt-1">
-              Supports SDIF v3.0 format — Hy-Tek Meet Manager, Colorado Timing, and compatible software
+              SDIF v3.0 format (.sd3) — compatible with Hy-Tek Meet Manager and USA Swimming software
             </p>
             <input
               ref={fileRef}
               type="file"
-              accept=".hy3,.cl2,.sd3,.txt"
+              accept=".sd3"
               className="hidden"
               onChange={handleFile}
             />
