@@ -16,16 +16,13 @@ import {
   generateDQList, generateDQSlips, generateSplitSheet, generateAwardCounts,
   generateAwardLabels, generateTeamRoster, generateAthleteReport, generateInvoicePDF,
   generateBillingSummary, generateOutstandingInvoices, generateOfficialMemo,
-  generateTimeStandardsReport,
+  generateTimeStandardsReport, generateTimeline,
 } from "@/lib/pdf";
-
-const API = "/api";
-
-async function apiFetch(path: string) {
-  const resp = await fetch(`${API}${path}`);
-  if (!resp.ok) throw new Error(`API error: ${resp.status}`);
-  return resp.json();
-}
+import {
+  buildPsychSheet, buildHeatSheet, buildResults, buildEntryListByTeam, buildDQs,
+  buildSplitSheet, buildAwardCounts, buildAwardLabels, buildTeamFullReport,
+  buildAthleteFullReport, buildBillingFullReport, buildTimeline,
+} from "@/lib/report-data";
 
 function ReportCard({
   title, description, icon: Icon, onGenerate, disabled, disabledReason,
@@ -97,79 +94,70 @@ export default function Reports() {
   const athleteName = athleteObj ? `${athleteObj.firstName} ${athleteObj.lastName}` : "Selected Athlete";
 
   // ── Meet report generators ─────────────────────────────────────────────────
+  // All meet/team/athlete/billing reports are built client-side from local-store
+  // (the app is localStorage-based — there is no backend serving report payloads).
   async function genPsychSheet() {
-    const data = await apiFetch(`/meets/${selectedMeet}/psych-sheet`);
-    generatePsychSheet(data);
+    generatePsychSheet(buildPsychSheet(parseInt(selectedMeet)));
   }
   async function genHeatSheet() {
-    const data = await apiFetch(`/meets/${selectedMeet}/heat-sheet`);
-    generateHeatSheet(data);
+    generateHeatSheet(buildHeatSheet(parseInt(selectedMeet)));
   }
   async function genResults() {
-    const data = await apiFetch(`/meets/${selectedMeet}/results-report`);
-    generateResults(data);
+    generateResults(buildResults(parseInt(selectedMeet)));
   }
   async function genEntryListByTeam() {
-    const data = await apiFetch(`/meets/${selectedMeet}/entry-list-by-team`);
-    generateEntryListByTeam(data);
+    generateEntryListByTeam(buildEntryListByTeam(parseInt(selectedMeet)));
+  }
+  async function genTimeline() {
+    generateTimeline(buildTimeline(parseInt(selectedMeet)));
   }
   async function genDQList() {
-    const data = await apiFetch(`/meets/${selectedMeet}/dq-report`);
-    generateDQList(data);
+    generateDQList(buildDQs(parseInt(selectedMeet)));
   }
   async function genDQSlips() {
-    const data = await apiFetch(`/meets/${selectedMeet}/dq-report`);
+    const data = buildDQs(parseInt(selectedMeet));
+    if (data.dqs.length === 0) { toast({ title: "No DQ/NS/DNF results to print", variant: "destructive" }); return; }
     generateDQSlips(data);
   }
   async function genSplitSheet() {
-    const data = await apiFetch(`/meets/${selectedMeet}/split-sheet`);
-    generateSplitSheet(data);
+    generateSplitSheet(buildSplitSheet(parseInt(selectedMeet)));
   }
   async function genAwardCounts() {
-    const data = await apiFetch(`/meets/${selectedMeet}/award-counts`);
-    generateAwardCounts(data);
+    generateAwardCounts(buildAwardCounts(parseInt(selectedMeet)));
   }
   async function genAwardLabels() {
-    const data = await apiFetch(`/meets/${selectedMeet}/results-report`);
-    generateAwardLabels(data);
+    generateAwardLabels(buildAwardLabels(parseInt(selectedMeet)));
   }
 
   // ── Team report generators ─────────────────────────────────────────────────
   async function genTeamRoster() {
-    const data = await apiFetch(`/teams/${selectedTeam}/full-report`);
-    generateTeamRoster(data);
+    generateTeamRoster(buildTeamFullReport(parseInt(selectedTeam)));
   }
   async function genContactList() {
-    const data = await apiFetch(`/teams/${selectedTeam}/full-report`);
-    const doc = { team: data.team, athletes: data.athletes };
-    generateTeamRoster(doc);
+    const data = buildTeamFullReport(parseInt(selectedTeam));
+    generateTeamRoster({ team: data.team, athletes: data.athletes });
   }
   async function genTeamEntryReport() {
-    const [meetData] = await Promise.all([
-      apiFetch(`/meets/${selectedMeet}/entry-list-by-team`),
-    ]);
-    const team = meetData.teams?.find((t: any) => t.team.id === parseInt(selectedTeam));
+    const meetData = buildEntryListByTeam(parseInt(selectedMeet));
+    const team = meetData.teams.find((t) => t.team.id === parseInt(selectedTeam));
     if (!team) { toast({ title: "No entries found for this team in the selected meet", variant: "destructive" }); return; }
     generateEntryListByTeam({ meet: meetData.meet, teams: [team] });
   }
 
   // ── Athlete report generators ──────────────────────────────────────────────
   async function genAthleteReport() {
-    const data = await apiFetch(`/athletes/${selectedAthlete}/full-report`);
-    generateAthleteReport(data);
+    generateAthleteReport(buildAthleteFullReport(parseInt(selectedAthlete)));
   }
 
   // ── Billing report generators ──────────────────────────────────────────────
   async function genAllInvoices() {
-    const data = await apiFetch(`/billing/full-report`);
-    generateBillingSummary(data, clubName);
+    generateBillingSummary(buildBillingFullReport().invoices, clubName);
   }
   async function genOutstanding() {
-    const data = await apiFetch(`/billing/full-report`);
-    generateOutstandingInvoices(data, clubName);
+    generateOutstandingInvoices(buildBillingFullReport().invoices, clubName);
   }
   async function genAthleteInvoice() {
-    const fullReport = await apiFetch(`/athletes/${selectedAthlete}/full-report`);
+    const fullReport = buildAthleteFullReport(parseInt(selectedAthlete));
     if (!fullReport.invoices?.length) {
       toast({ title: "No invoices for this athlete", variant: "destructive" }); return;
     }
@@ -268,6 +256,14 @@ export default function Reports() {
               description="All entries organized by team and athlete. Standard admin and entry verification report."
               icon={Users}
               onGenerate={genEntryListByTeam}
+              disabled={noMeet}
+              disabledReason={noMeet ? "Select a meet above" : undefined}
+            />
+            <ReportCard
+              title="Timeline"
+              description="Estimated meet run-order timeline by session, with event entry/heat counts and projected start times."
+              icon={ClipboardList}
+              onGenerate={genTimeline}
               disabled={noMeet}
               disabledReason={noMeet ? "Select a meet above" : undefined}
             />
