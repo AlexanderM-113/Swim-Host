@@ -13,8 +13,8 @@ import { Progress } from "@/components/ui/progress";
 import { formatTime, parseTime } from "@/lib/format-time";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { CheckCircle, Edit2, Wifi, Send, Loader2, Radio } from "lucide-react";
-import { broadcastRun } from "@/lib/live-broadcast";
+import { CheckCircle, Edit2, Wifi, Send, Loader2, Radio, Play, Square } from "lucide-react";
+import { broadcastRun, broadcastSignal, broadcastDataChanged, subscribeToSignals } from "@/lib/live-broadcast";
 import { autoPushLiveResults } from "@/lib/live-push";
 
 interface ResultForm {
@@ -55,6 +55,7 @@ export default function MeetRun({ meetId }: { meetId: number }) {
   });
   const [pushing, setPushing] = useState(false);
   const [lastPush, setLastPush] = useState<string | null>(null);
+  const [racingHeat, setRacingHeat] = useState<number | null>(null);
 
   useEffect(() => {
     if (!selectedEvent || !events) return;
@@ -77,6 +78,61 @@ export default function MeetRun({ meetId }: { meetId: number }) {
   const setResult = useSetResult();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Stay in lockstep with the Timing console / other tabs: when any screen
+  // commits results for this meet, refetch so the Run grid reflects it live.
+  useEffect(() => {
+    return subscribeToSignals((sig) => {
+      if (sig.meetId !== meetId) return;
+      if (sig.type === "data-changed" && selectedEvent) {
+        queryClient.invalidateQueries({ queryKey: getListHeatsQueryKey(parseInt(selectedEvent)) });
+      }
+    });
+  }, [meetId, selectedEvent, queryClient]);
+
+  // Reset the "racing" indicator whenever the event changes.
+  useEffect(() => {
+    setRacingHeat(null);
+  }, [selectedEvent]);
+
+  function firstIncompleteHeat(): number | null {
+    if (!heats || heats.length === 0) return null;
+    const incomplete = heats.find((h: any) =>
+      h.lanes?.filter((l: any) => l.athleteId).some((l: any) => !(l.finishTime || l.dq || l.ns || l.dnf))
+    );
+    return (incomplete ?? heats[0])?.heatNumber ?? null;
+  }
+
+  function startRace() {
+    if (!selectedEvent) return;
+    const heatNumber = firstIncompleteHeat();
+    setRacingHeat(heatNumber);
+    // Drive the Scoreboard + Timing console (and any connected start system).
+    broadcastSignal({
+      type: "start",
+      meetId,
+      eventId: parseInt(selectedEvent),
+      heatNumber: heatNumber ?? undefined,
+      at: new Date().toISOString(),
+    });
+    toast({
+      title: "Race started",
+      description: heatNumber ? `Heat ${heatNumber} — scoreboard & timing started` : "Scoreboard & timing started",
+    });
+  }
+
+  function stopRace() {
+    if (!selectedEvent) return;
+    broadcastSignal({
+      type: "stop",
+      meetId,
+      eventId: parseInt(selectedEvent),
+      heatNumber: racingHeat ?? undefined,
+      at: new Date().toISOString(),
+    });
+    setRacingHeat(null);
+    toast({ title: "Race stopped" });
+  }
 
   function openEdit(lane: any, heatNumber: number) {
     setEditLane(lane);
@@ -115,6 +171,7 @@ export default function MeetRun({ meetId }: { meetId: number }) {
           setEditLane(null);
           queryClient.invalidateQueries({ queryKey: getListHeatsQueryKey(parseInt(selectedEvent)) });
           refetch();
+          broadcastDataChanged(meetId);
           autoPushLiveResults(meetId)
             .then(() => setLastPush(new Date().toLocaleTimeString()))
             .catch(() => {});
@@ -179,6 +236,27 @@ export default function MeetRun({ meetId }: { meetId: number }) {
                     <Radio className="h-3.5 w-3.5 animate-pulse" />
                     Broadcasting
                   </div>
+                )}
+                {selectedEvent && (
+                  racingHeat !== null ? (
+                    <Button
+                      size="sm"
+                      onClick={stopRace}
+                      className="bg-red-600 hover:bg-red-700 text-white"
+                    >
+                      <Square className="h-4 w-4 mr-2" />
+                      Stop Heat {racingHeat}
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={startRace}
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      <Play className="h-4 w-4 mr-2" />
+                      Start Race
+                    </Button>
+                  )
                 )}
                 <Button
                   variant="outline"

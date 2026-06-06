@@ -15,7 +15,7 @@ import {
   Settings, Zap, Radio, CheckCircle2, Keyboard, Wifi
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { subscribeToRun, getActiveRun } from "@/lib/live-broadcast";
+import { subscribeToRun, getActiveRun, subscribeToSignals, broadcastDataChanged } from "@/lib/live-broadcast";
 import { autoPushLiveResults } from "@/lib/live-push";
 
 type HardwareMode = "manual" | "cts" | "daktronics" | "omega" | "sim";
@@ -171,6 +171,34 @@ export default function TimingConsolePage() {
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [running]);
 
+  // Remote race control: the Run screen's Start/Stop button drives the clock
+  // here so the timing operator doesn't have to hit start separately. If a
+  // hardware start system is connected, relay the start command to it too.
+  useEffect(() => {
+    return subscribeToSignals((sig) => {
+      if (selectedMeet && sig.meetId !== parseInt(selectedMeet)) return;
+      if (sig.type === "start") {
+        if (sig.heatNumber != null) setSelectedHeat(sig.heatNumber);
+        setLanes(buildLanes(eventLanes));
+        setCommitted(false);
+        setStartedAt(new Date(sig.at).getTime());
+        setElapsed(0);
+        setRunning(true);
+        if (connected && wsRef.current?.readyState === WebSocket.OPEN) {
+          try { wsRef.current.send(JSON.stringify({ command: "start" })); } catch {}
+        }
+      } else if (sig.type === "stop") {
+        setRunning(false);
+      } else if (sig.type === "reset") {
+        setRunning(false);
+        setElapsed(0);
+        setStartedAt(null);
+        setLanes(buildLanes(eventLanes));
+        setCommitted(false);
+      }
+    });
+  }, [selectedMeet, eventLanes, connected]);
+
   const touchLane = useCallback((laneNum: number) => {
     if (!running) return;
     const t = elapsed;
@@ -257,6 +285,7 @@ export default function TimingConsolePage() {
     setCommitted(true);
     toast({ title: `Committed ${success} results`, description: `Heat ${selectedHeat} results saved.` });
     if (selectedMeet) {
+      broadcastDataChanged(parseInt(selectedMeet));
       autoPushLiveResults(parseInt(selectedMeet)).catch(() => {});
     }
   }
