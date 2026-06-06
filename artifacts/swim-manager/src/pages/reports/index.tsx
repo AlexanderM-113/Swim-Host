@@ -23,6 +23,7 @@ import {
   buildSplitSheet, buildAwardCounts, buildAwardLabels, buildTeamFullReport,
   buildAthleteFullReport, buildBillingFullReport, buildTimeline,
 } from "@/lib/report-data";
+import { logger } from "@/lib/logger";
 
 function ReportCard({
   title, description, icon: Icon, onGenerate, disabled, disabledReason,
@@ -42,6 +43,7 @@ function ReportCard({
     try {
       await onGenerate();
     } catch (e: any) {
+      logger.error(`Report failed: ${title}`, e);
       toast({ title: "Report failed", description: e?.message ?? "Unexpected error", variant: "destructive" });
     } finally {
       setLoading(false);
