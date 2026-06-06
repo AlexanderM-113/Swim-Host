@@ -1,10 +1,11 @@
 import { useEffect } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { useToast } from "@/hooks/use-toast";
 import { Layout } from "@/components/layout";
+import { logger } from "@/lib/logger";
+import { notifyError } from "@/lib/notify";
 import { ModuleProvider } from "@/contexts/module-context";
 import { LaunchModal } from "@/components/launch-modal";
 import { OfflineBanner } from "@/components/offline-banner";
@@ -43,6 +44,8 @@ import AthleteReadiness from "@/pages/analytics/readiness";
 import VideoAnalysis from "@/pages/analytics/video";
 import TechniqueAnalytics from "@/pages/analytics/technique";
 
+// Query/mutation failures are logged and surfaced as a single de-duplicated
+// toast instead of bubbling up as raw unhandled rejections.
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -50,30 +53,30 @@ const queryClient = new QueryClient({
       staleTime: 30_000,
     },
   },
+  queryCache: new QueryCache({
+    onError: (error, query) => {
+      notifyError("Couldn't load data", error, {
+        logMessage: `Query failed: ${String(query.queryKey)}`,
+      });
+    },
+  }),
+  mutationCache: new MutationCache({
+    onError: (error) => {
+      notifyError("Action failed", error, { logMessage: "Mutation failed" });
+    },
+  }),
 });
 
-// In-memory log ring buffer (last 100 entries)
-const logBuffer: { level: string; message: string; ts: string }[] = [];
-export function getLogBuffer() { return [...logBuffer]; }
-
-function addLog(level: string, message: string) {
-  logBuffer.push({ level, message, ts: new Date().toISOString() });
-  if (logBuffer.length > 100) logBuffer.shift();
-}
-
 function GlobalErrorHandler() {
-  const { toast } = useToast();
-
   useEffect(() => {
     function handleUnhandledRejection(ev: PromiseRejectionEvent) {
-      const msg = ev.reason instanceof Error ? ev.reason.message : String(ev.reason ?? "Unknown error");
-      console.error("[unhandledRejection]", ev.reason);
-      addLog("error", msg);
-      toast({ title: "Unexpected error", description: msg.substring(0, 120), variant: "destructive" });
+      notifyError("Unexpected error", ev.reason, {
+        logMessage: "Unhandled promise rejection",
+      });
     }
     function handleError(ev: ErrorEvent) {
-      console.error("[onerror]", ev.error ?? ev.message);
-      addLog("error", ev.message ?? "Script error");
+      // Don't toast on every script error (can be noisy / third-party); just log.
+      logger.error(ev.message || "Script error", ev.error ?? ev.message);
     }
     window.addEventListener("unhandledrejection", handleUnhandledRejection);
     window.addEventListener("error", handleError);
@@ -81,7 +84,7 @@ function GlobalErrorHandler() {
       window.removeEventListener("unhandledrejection", handleUnhandledRejection);
       window.removeEventListener("error", handleError);
     };
-  }, [toast]);
+  }, []);
 
   return null;
 }
