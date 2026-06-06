@@ -780,3 +780,63 @@ export function generateTimeStandardsReport(standards: any[], clubName: string) 
   tableBase(doc, 58, title, clubName, head, body);
   doc.save(`time-standards-${new Date().toISOString().slice(0, 10)}.pdf`);
 }
+
+// ─── TIMELINE ─────────────────────────────────────────────────────────────────
+export function generateTimeline(data: { meet: any; sessions: any[] }) {
+  const doc = startDoc("Timeline");
+  const title = "Meet Timeline";
+  const meetName = `${data.meet.name} — ${fmtDate(data.meet.startDate)} — ${data.meet.course}`;
+
+  pageHeader(doc, title, meetName);
+  pageFooter(doc);
+
+  let y = 58;
+  for (const session of data.sessions) {
+    if (!session.events || session.events.length === 0) continue;
+    if (y > 660) { doc.addPage(); y = 58; }
+
+    const parts = [
+      session.name,
+      session.sessionType,
+      session.date ? fmtDate(session.date) : null,
+      session.warmupTime ? `Warm-up ${session.warmupTime}` : null,
+      session.startTime ? `Start ${session.startTime}` : null,
+    ].filter(Boolean);
+    y = eventBanner(doc, parts.join("  •  "), y);
+
+    const head = [["Est. Start", "Event #", "Event", "Entries", "Heats"]];
+    const body = session.events.map((e: any) => [
+      e.estStart ?? "-",
+      e.eventNumber,
+      e.eventName,
+      e.entryCount ?? "-",
+      e.heatCount ?? "-",
+    ]);
+
+    autoTable(doc, {
+      head, body,
+      startY: y,
+      theme: "grid",
+      headStyles: { fillColor: POOL_BLUE, textColor: WHITE, fontStyle: "bold", fontSize: 8, cellPadding: 2.5 },
+      bodyStyles: { fontSize: 8, cellPadding: 2 },
+      alternateRowStyles: { fillColor: POOL_STRIPE },
+      margin: { top: 55, left: 14, right: 14, bottom: 22 },
+      columnStyles: { 0: { cellWidth: 70 }, 1: { cellWidth: 50 }, 3: { cellWidth: 50 }, 4: { cellWidth: 45 } },
+      didDrawPage: () => { pageHeader(doc, title, meetName); pageFooter(doc); },
+    });
+    y = (doc as any).lastAutoTable.finalY + 6;
+
+    if (session.estEndMinutes > 0) {
+      doc.setFontSize(7.5);
+      doc.setTextColor(100, 100, 100);
+      const hrs = Math.floor(session.estEndMinutes / 60);
+      const mins = Math.round(session.estEndMinutes % 60);
+      doc.text(`Estimated session duration: ${hrs > 0 ? `${hrs}h ` : ""}${mins}m`, 18, y + 8);
+      doc.setTextColor(0, 0, 0);
+      y += 14;
+    }
+    y += 6;
+  }
+
+  doc.save(`timeline-${data.meet.name.replace(/\s+/g, "-")}.pdf`);
+}
