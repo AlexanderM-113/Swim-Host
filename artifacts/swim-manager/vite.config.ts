@@ -1,50 +1,60 @@
-import { defineConfig } from "vite";
+import { defineConfig, type PluginOption } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
-import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
+// Portability: the app must run anywhere, not just on Replit. PORT/BASE_PATH
+// fall back to sensible defaults instead of throwing, and all @replit/* plugins
+// are loaded optionally so the build still works if those packages are absent.
+const DEFAULT_PORT = 21868;
 const rawPort = process.env.PORT;
-
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
+const parsedPort = rawPort ? Number(rawPort) : NaN;
+const port = !Number.isNaN(parsedPort) && parsedPort > 0 ? parsedPort : DEFAULT_PORT;
+if (rawPort && port === DEFAULT_PORT) {
+  console.warn(`[vite] Invalid PORT "${rawPort}"; falling back to ${DEFAULT_PORT}.`);
 }
 
-const port = Number(rawPort);
+const basePath = process.env.BASE_PATH || "/";
 
-if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
+const isReplit = process.env.REPL_ID !== undefined;
+const isDev = process.env.NODE_ENV !== "production";
+
+/** Load an optional plugin; silently skip it if the package isn't installed. */
+async function optionalPlugin(
+  load: () => Promise<PluginOption | PluginOption[]>,
+): Promise<PluginOption[]> {
+  try {
+    const p = await load();
+    return Array.isArray(p) ? p : [p];
+  } catch {
+    return [];
+  }
 }
 
-const basePath = process.env.BASE_PATH;
-
-if (!basePath) {
-  throw new Error(
-    "BASE_PATH environment variable is required but was not provided.",
-  );
-}
+const replitPlugins: PluginOption[] = [
+  ...(await optionalPlugin(() =>
+    import("@replit/vite-plugin-runtime-error-modal").then((m) => m.default()),
+  )),
+  ...(isDev && isReplit
+    ? [
+        ...(await optionalPlugin(() =>
+          import("@replit/vite-plugin-cartographer").then((m) =>
+            m.cartographer({ root: path.resolve(import.meta.dirname, "..") }),
+          ),
+        )),
+        ...(await optionalPlugin(() =>
+          import("@replit/vite-plugin-dev-banner").then((m) => m.devBanner()),
+        )),
+      ]
+    : []),
+];
 
 export default defineConfig({
   base: basePath,
   plugins: [
     react(),
     tailwindcss(),
-    runtimeErrorOverlay(),
-    ...(process.env.NODE_ENV !== "production" &&
-    process.env.REPL_ID !== undefined
-      ? [
-          await import("@replit/vite-plugin-cartographer").then((m) =>
-            m.cartographer({
-              root: path.resolve(import.meta.dirname, ".."),
-            }),
-          ),
-          await import("@replit/vite-plugin-dev-banner").then((m) =>
-            m.devBanner(),
-          ),
-        ]
-      : []),
+    ...replitPlugins,
   ],
   resolve: {
     alias: {

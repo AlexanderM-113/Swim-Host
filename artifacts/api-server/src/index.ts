@@ -1,19 +1,17 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 
+// Portability: default to 8080 when PORT is unset so the server runs anywhere,
+// not just on Replit (which always injects PORT).
+const DEFAULT_PORT = 8080;
 const rawPort = process.env["PORT"];
+const parsedPort = rawPort ? Number(rawPort) : NaN;
 
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
-
-const port = Number(rawPort);
-
-if (Number.isNaN(port) || port <= 0) {
+if (rawPort && (Number.isNaN(parsedPort) || parsedPort <= 0)) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
+
+const port = !Number.isNaN(parsedPort) && parsedPort > 0 ? parsedPort : DEFAULT_PORT;
 
 app.listen(port, (err) => {
   if (err) {
