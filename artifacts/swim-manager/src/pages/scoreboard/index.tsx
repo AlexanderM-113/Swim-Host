@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { useListMeets, useListEvents, useListHeats } from "@/lib/local-store";
 import { formatTime } from "@/lib/format-time";
-import { subscribeToRun, getActiveRun } from "@/lib/live-broadcast";
+import { subscribeToRun, getActiveRun, subscribeToSignals } from "@/lib/live-broadcast";
 
 const LOGO_KEY = "swimmanager:clubLogo";
 const PLACE_MEDAL: Record<number, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
@@ -139,6 +139,8 @@ export default function Scoreboard() {
   const [customTitle, setCustomTitle] = useState("");
   const [clubLogo, setClubLogo] = useState<string>(() => localStorage.getItem(LOGO_KEY) ?? "");
   const [followRun, setFollowRun] = useState(false);
+  const [racing, setRacing] = useState(false);
+  const [pendingHeatNumber, setPendingHeatNumber] = useState<number | null>(null);
   const refreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -181,6 +183,35 @@ export default function Scoreboard() {
     }
     return () => { if (refreshRef.current) clearInterval(refreshRef.current); };
   }, [autoRefresh, refetchHeats, refetchEvents]);
+
+  // React to race-control + data-change signals from the Run screen / Timing
+  // console so the board jumps to the live heat and refreshes results instantly.
+  useEffect(() => {
+    return subscribeToSignals((sig) => {
+      if (sig.type === "start") {
+        setRacing(true);
+        setSelectedMeet(String(sig.meetId));
+        if (sig.eventId != null) setSelectedEvent(String(sig.eventId));
+        setPendingHeatNumber(sig.heatNumber ?? null);
+      } else if (sig.type === "stop" || sig.type === "reset") {
+        setRacing(false);
+      } else if (sig.type === "data-changed") {
+        refetchHeats();
+        refetchEvents();
+      }
+    });
+  }, [refetchHeats, refetchEvents]);
+
+  // Once heats for the live event load, resolve the broadcast heat number to
+  // its index on this board.
+  useEffect(() => {
+    if (pendingHeatNumber == null || !heats) return;
+    const idx = heats.findIndex((h: any) => h.heatNumber === pendingHeatNumber);
+    if (idx >= 0) {
+      setSelectedHeat(idx);
+      setPendingHeatNumber(null);
+    }
+  }, [pendingHeatNumber, heats]);
 
   const advanceHeat = useCallback(() => {
     if (selectedHeat < totalHeats - 1) {
@@ -366,6 +397,13 @@ export default function Scoreboard() {
                 {autoAdvanceActive ? <Pause className="h-3.5 w-3.5 mr-1" /> : <Play className="h-3.5 w-3.5 mr-1" />}
                 {autoAdvanceActive ? "Pause" : "Start"}
               </Button>
+            )}
+
+            {racing && (
+              <Badge className="bg-red-600 text-white animate-pulse">
+                <Radio className="h-3.5 w-3.5 mr-1" />
+                RACING
+              </Badge>
             )}
 
             <Button
