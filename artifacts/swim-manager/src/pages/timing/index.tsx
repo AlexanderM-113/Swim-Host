@@ -20,6 +20,8 @@ import { autoPushLiveResults } from "@/lib/live-push";
 import {
   TimingConnection,
   VENDOR_DEFAULT_PORT,
+  autoDetectPort,
+  probeWebSocket,
   type HardwareMode,
   type ConnectionStatus,
   type TimingEvent,
@@ -101,6 +103,7 @@ export default function TimingConsolePage() {
     return stored ? JSON.parse(stored) : { mode: "manual", ip: "192.168.1.100", port: "5100" };
   });
   const [connStatus, setConnStatus] = useState<ConnectionStatus>("idle");
+  const [probing, setProbing] = useState(false);
   const connected = connStatus === "connected";
   const [running, setRunning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -356,8 +359,31 @@ export default function TimingConsolePage() {
     }
   }, [eventLanes]);
 
-  function connectHardware() {
+  async function detectPort() {
+    if (!hwConfig.ip) { toast({ title: "Enter the bridge IP first", variant: "destructive" }); return; }
+    setProbing(true);
+    const found = await autoDetectPort(hwConfig.mode, hwConfig.ip);
+    setProbing(false);
+    if (found) {
+      setHwConfig((c) => ({ ...c, port: found }));
+      toast({ title: "Timing system found", description: `Reachable on port ${found}.` });
+    } else {
+      toast({ title: "No timing system found", description: "Checked common ports — verify the bridge is running and on the network.", variant: "destructive" });
+    }
+  }
+
+  async function connectHardware() {
     if (hwConfig.mode === "manual" || hwConfig.mode === "sim") { setConnStatus("connected"); return; }
+    // Only connect when the bridge is actually reachable, so we never show a
+    // phantom connection or hammer a closed port with reconnect attempts.
+    setProbing(true);
+    const reachable = await probeWebSocket(`ws://${hwConfig.ip}:${hwConfig.port}`);
+    setProbing(false);
+    if (!reachable) {
+      setConnStatus("error");
+      toast({ title: "Timing system not reachable", description: `Nothing responded at ${hwConfig.ip}:${hwConfig.port}. Try Auto-detect.`, variant: "destructive" });
+      return;
+    }
     connRef.current?.close();
     const conn = new TimingConnection(
       hwConfig.mode,
@@ -634,14 +660,17 @@ export default function TimingConsolePage() {
                   </div>
                   <div className="flex gap-3">
                     {connStatus === "idle" || connStatus === "error" ? (
-                      <Button onClick={connectHardware} className="bg-green-600 hover:bg-green-700">
-                        <Wifi className="h-4 w-4 mr-2" /> Connect
+                      <Button onClick={connectHardware} disabled={probing} className="bg-green-600 hover:bg-green-700">
+                        <Wifi className="h-4 w-4 mr-2" /> {probing ? "Checking…" : "Connect"}
                       </Button>
                     ) : (
                       <Button onClick={disconnect} variant="destructive">
                         <WifiOff className="h-4 w-4 mr-2" /> {connStatus === "connected" ? "Disconnect" : "Cancel"}
                       </Button>
                     )}
+                    <Button variant="outline" onClick={detectPort} disabled={probing}>
+                      <Radio className={`h-4 w-4 mr-2 ${probing ? "animate-pulse" : ""}`} /> Auto-detect Port
+                    </Button>
                     <Button variant="outline" onClick={saveConfig}>Save Config</Button>
                   </div>
                 </>
