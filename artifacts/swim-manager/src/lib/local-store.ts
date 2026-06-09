@@ -181,6 +181,25 @@ export interface EventFinals {
   generatedAt: string;
 }
 
+export interface RelayLeg {
+  legNumber: number;
+  stroke: string; // "Freestyle" for a free relay; Back/Breast/Fly/Free for medley
+  athleteId: number | null;
+  athleteName: string;
+  seedTime: number | null; // athlete's best time for this leg's stroke + distance
+}
+
+export interface RelayTeam {
+  id: number;
+  eventId: number;
+  meetId: number;
+  teamId: number;
+  teamName: string;
+  letter: string; // "A" | "B" | "C" …
+  legs: RelayLeg[];
+  totalSeedTime: number | null; // sum of leg times (null if any leg has no time)
+}
+
 export interface Workout {
   id: number;
   name: string;
@@ -268,6 +287,7 @@ export interface AppStore {
   results: Result[];
   sessions: Session[];
   finals: EventFinals[];
+  relayTeams: RelayTeam[];
   workouts: Workout[];
   invoices: Invoice[];
   paymentPlans: PaymentPlan[];
@@ -345,6 +365,7 @@ const DEFAULT_STORE: AppStore = {
   results: [],
   sessions: [],
   finals: [],
+  relayTeams: [],
   workouts: SAMPLE_WORKOUTS,
   invoices: [],
   paymentPlans: [],
@@ -434,6 +455,8 @@ export const getGetMeetTeamScoresQueryKey = (meetId?: number) =>
   ["meetTeamScores", meetId] as const;
 export const getListFinalsQueryKey = (meetId?: number) =>
   ["finals", meetId] as const;
+export const getListRelayTeamsQueryKey = (meetId?: number) =>
+  ["relayTeams", meetId] as const;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
