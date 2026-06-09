@@ -63,6 +63,29 @@ function PaceClock({ fullscreen }: { fullscreen: boolean }) {
   );
 }
 
+// Live race clock that auto-starts the moment the Run screen fires a start
+// signal (driven by the absolute start timestamp so it stays accurate even if
+// this board joined late). Freezes on stop; clears on reset.
+function RaceClock({ startAt, running, fullscreen }: { startAt: number | null; running: boolean; fullscreen: boolean }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => setNow(Date.now()), 23);
+    return () => clearInterval(id);
+  }, [running]);
+  if (startAt == null) return null;
+  const elapsed = Math.max(0, ((running ? now : Math.max(now, startAt)) - startAt) / 1000);
+  const mm = Math.floor(elapsed / 60);
+  const ss = Math.floor(elapsed % 60);
+  const hh = Math.floor((elapsed * 100) % 100);
+  const display = `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}.${String(hh).padStart(2, "0")}`;
+  return (
+    <div className={`font-mono font-black tracking-widest tabular-nums px-3 py-1 rounded border ${running ? "text-red-400 border-red-700 bg-red-950/40" : "text-slate-300 border-slate-700 bg-black/40"} ${fullscreen ? "text-3xl" : "text-xl"}`}>
+      {display}
+    </div>
+  );
+}
+
 function AutoAdvanceBar({
   interval,
   onAdvance,
@@ -140,6 +163,7 @@ export default function Scoreboard() {
   const [clubLogo, setClubLogo] = useState<string>(() => localStorage.getItem(LOGO_KEY) ?? "");
   const [followRun, setFollowRun] = useState(false);
   const [racing, setRacing] = useState(false);
+  const [raceStartAt, setRaceStartAt] = useState<number | null>(null);
   const [pendingHeatNumber, setPendingHeatNumber] = useState<number | null>(null);
   const refreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -190,11 +214,16 @@ export default function Scoreboard() {
     return subscribeToSignals((sig) => {
       if (sig.type === "start") {
         setRacing(true);
+        // Auto-start the scoreboard race clock from the broadcast start time.
+        setRaceStartAt(sig.at ? new Date(sig.at).getTime() : Date.now());
         setSelectedMeet(String(sig.meetId));
         if (sig.eventId != null) setSelectedEvent(String(sig.eventId));
         setPendingHeatNumber(sig.heatNumber ?? null);
-      } else if (sig.type === "stop" || sig.type === "reset") {
+      } else if (sig.type === "stop") {
         setRacing(false);
+      } else if (sig.type === "reset") {
+        setRacing(false);
+        setRaceStartAt(null);
       } else if (sig.type === "data-changed") {
         refetchHeats();
         refetchEvents();
@@ -405,6 +434,7 @@ export default function Scoreboard() {
                 RACING
               </Badge>
             )}
+            <RaceClock startAt={raceStartAt} running={racing} fullscreen={isFullscreen} />
 
             <Button
               size="sm"

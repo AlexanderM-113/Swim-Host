@@ -25,6 +25,61 @@ export const VENDOR_DEFAULT_PORT: Record<HardwareMode, string> = {
   omega: "5100",
 };
 
+// Ports each vendor's bridge is commonly exposed on, tried in order when
+// auto-detecting. The default port is listed first.
+export const VENDOR_CANDIDATE_PORTS: Record<HardwareMode, string[]> = {
+  manual: [],
+  sim: [],
+  cts: ["5100", "10000", "20000", "30000"],
+  daktronics: ["21", "5000", "5100", "23"],
+  omega: ["5100", "6000", "5000"],
+};
+
+/**
+ * Attempt a WebSocket handshake and resolve whether it opened within the
+ * timeout. Used to check a bridge is actually reachable before "connecting",
+ * so the console never shows a phantom connection or spins a reconnect loop
+ * against a port nothing is listening on.
+ */
+export function probeWebSocket(url: string, timeoutMs = 2000): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false;
+    let ws: WebSocket | null = null;
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { ws?.close(); } catch {}
+      resolve(ok);
+    };
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    try {
+      ws = new WebSocket(url);
+    } catch {
+      finish(false);
+      return;
+    }
+    ws.onopen = () => finish(true);
+    ws.onerror = () => finish(false);
+    ws.onclose = () => finish(false);
+  });
+}
+
+/**
+ * Probe each candidate port for a vendor and return the first reachable one,
+ * or null if none respond.
+ */
+export async function autoDetectPort(
+  mode: HardwareMode,
+  ip: string,
+  timeoutMs = 1500
+): Promise<string | null> {
+  for (const port of VENDOR_CANDIDATE_PORTS[mode] ?? []) {
+    if (await probeWebSocket(`ws://${ip}:${port}`, timeoutMs)) return port;
+  }
+  return null;
+}
+
 // Field separators each vendor's ASCII output commonly uses.
 const DELIMS: Record<string, RegExp> = {
   cts: /[;,]/,
