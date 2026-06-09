@@ -17,8 +17,13 @@ import {
 import { cn } from "@/lib/utils";
 import { subscribeToRun, getActiveRun, subscribeToSignals, broadcastDataChanged } from "@/lib/live-broadcast";
 import { autoPushLiveResults } from "@/lib/live-push";
-
-type HardwareMode = "manual" | "cts" | "daktronics" | "omega" | "sim";
+import {
+  TimingConnection,
+  VENDOR_DEFAULT_PORT,
+  type HardwareMode,
+  type ConnectionStatus,
+  type TimingEvent,
+} from "@/lib/timing-systems";
 
 interface LaneTime {
   lane: number;
@@ -95,7 +100,8 @@ export default function TimingConsolePage() {
     const stored = localStorage.getItem("timing_hw_config");
     return stored ? JSON.parse(stored) : { mode: "manual", ip: "192.168.1.100", port: "5100" };
   });
-  const [connected, setConnected] = useState(false);
+  const [connStatus, setConnStatus] = useState<ConnectionStatus>("idle");
+  const connected = connStatus === "connected";
   const [running, setRunning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [startedAt, setStartedAt] = useState<number | null>(null);
@@ -114,7 +120,7 @@ export default function TimingConsolePage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
+  const connRef = useRef<TimingConnection | null>(null);
   // Holds the start timestamp when a remote "start" signal selects a new
   // event/heat, so the reset effect (which fires on selection change) starts
   // the clock instead of clearing it.
@@ -213,9 +219,7 @@ export default function TimingConsolePage() {
           setElapsed(0);
           setRunning(true);
         }
-        if (connected && wsRef.current?.readyState === WebSocket.OPEN) {
-          try { wsRef.current.send(JSON.stringify({ command: "start" })); } catch {}
-        }
+        connRef.current?.send({ command: "start", at: sig.at });
       } else if (sig.type === "stop") {
         setRunning(false);
       } else if (sig.type === "reset") {
@@ -319,30 +323,66 @@ export default function TimingConsolePage() {
     }
   }
 
-  function connectHardware() {
-    if (hwConfig.mode === "manual" || hwConfig.mode === "sim") { setConnected(true); return; }
-    try {
-      const ws = new WebSocket(`ws://${hwConfig.ip}:${hwConfig.port}`);
-      ws.onopen = () => { setConnected(true); toast({ title: "Hardware connected", description: `${MODE_LABELS[hwConfig.mode]}` }); };
-      ws.onerror = () => { setConnected(false); toast({ title: "Connection failed", description: "Check IP/port and hardware.", variant: "destructive" }); };
-      ws.onmessage = (evt) => {
-        try {
-          const data = JSON.parse(evt.data);
-          if (data.type === "touch" && data.lane) touchLane(data.lane);
-          if (data.type === "start") { setRunning(true); setStartedAt(Date.now()); }
-        } catch {}
-      };
-      ws.onclose = () => setConnected(false);
-      wsRef.current = ws;
-    } catch {
-      toast({ title: "Connection failed", variant: "destructive" });
+  // Apply a normalized timing event from the hardware bridge to the console.
+  const applyTimingEvent = useCallback((e: TimingEvent) => {
+    if (e.kind === "start") {
+      setLanes(buildLanes(eventLanes));
+      setCommitted(false);
+      setStartedAt(Date.now());
+      setElapsed(0);
+      setRunning(true);
+    } else if (e.kind === "reset") {
+      setRunning(false);
+      setElapsed(0);
+      setStartedAt(null);
+      setLanes(buildLanes(eventLanes));
+      setCommitted(false);
+    } else if (e.kind === "touch") {
+      // Use the device-reported finish time when present; otherwise fall back to
+      // the console's own elapsed clock at the moment the touch arrived.
+      setLanes((prev) => prev.map((l) =>
+        l.lane === e.lane && !l.touched
+          ? { ...l, time: e.time ?? l.time ?? null, touched: true }
+          : l
+      ));
+    } else if (e.kind === "split") {
+      setLanes((prev) => prev.map((l) =>
+        l.lane === e.lane
+          ? { ...l, [e.index <= 1 ? "split1" : "split2"]: e.time }
+          : l
+      ));
+    } else if (e.kind === "dq") {
+      setLanes((prev) => prev.map((l) => l.lane === e.lane ? { ...l, dq: true, ns: false } : l));
     }
+  }, [eventLanes]);
+
+  function connectHardware() {
+    if (hwConfig.mode === "manual" || hwConfig.mode === "sim") { setConnStatus("connected"); return; }
+    connRef.current?.close();
+    const conn = new TimingConnection(
+      hwConfig.mode,
+      `ws://${hwConfig.ip}:${hwConfig.port}`,
+      {
+        onEvent: applyTimingEvent,
+        onStatus: (s, detail) => {
+          setConnStatus(s);
+          if (s === "connected") toast({ title: "Hardware connected", description: MODE_LABELS[hwConfig.mode] });
+          else if (s === "error") toast({ title: "Connection issue", description: detail || "Check IP/port and hardware.", variant: "destructive" });
+        },
+      }
+    );
+    connRef.current = conn;
+    conn.connect();
   }
 
   function disconnect() {
-    wsRef.current?.close();
-    setConnected(false);
+    connRef.current?.close();
+    connRef.current = null;
+    setConnStatus("idle");
   }
+
+  // Tear the connection down if the operator leaves the console.
+  useEffect(() => () => { connRef.current?.close(); connRef.current = null; }, []);
 
   function saveConfig() {
     localStorage.setItem("timing_hw_config", JSON.stringify(hwConfig));
@@ -369,8 +409,12 @@ export default function TimingConsolePage() {
             <Radio className={`h-3.5 w-3.5 mr-1 ${followRun ? "animate-pulse" : ""}`} />
             {followRun ? "Following Run Screen" : "Follow Run Screen"}
           </Button>
-          {connected
+          {connStatus === "connected"
             ? <Badge className="bg-green-500/20 text-green-400 border-green-500/30"><Wifi className="h-3 w-3 mr-1" />Connected</Badge>
+            : connStatus === "connecting" || connStatus === "reconnecting"
+            ? <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30"><Radio className="h-3 w-3 mr-1 animate-pulse" />{connStatus === "reconnecting" ? "Reconnecting…" : "Connecting…"}</Badge>
+            : connStatus === "error"
+            ? <Badge className="bg-red-500/20 text-red-400 border-red-500/30"><WifiOff className="h-3 w-3 mr-1" />Error</Badge>
             : <Badge variant="outline" className="text-slate-400"><WifiOff className="h-3 w-3 mr-1" />Disconnected</Badge>}
           <Badge variant="outline">{MODE_LABELS[hwConfig.mode].split(" ")[0]}</Badge>
         </div>
@@ -546,7 +590,7 @@ export default function TimingConsolePage() {
             <CardContent className="space-y-6">
               <div className="space-y-2">
                 <Label>Timing System Mode</Label>
-                <Select value={hwConfig.mode} onValueChange={v => setHwConfig(c => ({ ...c, mode: v as HardwareMode }))}>
+                <Select value={hwConfig.mode} onValueChange={v => setHwConfig(c => ({ ...c, mode: v as HardwareMode, port: VENDOR_DEFAULT_PORT[v as HardwareMode] || c.port }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {(Object.keys(MODE_LABELS) as HardwareMode[]).map(k => (
@@ -581,15 +625,21 @@ export default function TimingConsolePage() {
                       <p className="font-semibold text-foreground">Omega ARES 21</p>
                       <p>Default port: 5100. Configure ARES 21 "External Data Output" to this machine's IP. Touch pads connect via the ARES hardware.</p>
                     </>}
+                    <p className="pt-1 border-t border-border/50 mt-2">
+                      Connects to a WebSocket bridge on the scoring PC. The console reads either structured
+                      JSON (<code>{`{type:"touch",lane,time}`}</code>, <code>start</code>, <code>reset</code>,
+                      <code>dq</code>, <code>split</code>) or the vendor's line output (e.g. <code>1;58.10</code>).
+                      It auto-reconnects if the link drops.
+                    </p>
                   </div>
                   <div className="flex gap-3">
-                    {!connected ? (
+                    {connStatus === "idle" || connStatus === "error" ? (
                       <Button onClick={connectHardware} className="bg-green-600 hover:bg-green-700">
                         <Wifi className="h-4 w-4 mr-2" /> Connect
                       </Button>
                     ) : (
                       <Button onClick={disconnect} variant="destructive">
-                        <WifiOff className="h-4 w-4 mr-2" /> Disconnect
+                        <WifiOff className="h-4 w-4 mr-2" /> {connStatus === "connected" ? "Disconnect" : "Cancel"}
                       </Button>
                     )}
                     <Button variant="outline" onClick={saveConfig}>Save Config</Button>
@@ -606,7 +656,7 @@ export default function TimingConsolePage() {
                     <span><kbd className="px-1.5 py-0.5 rounded bg-muted font-mono text-xs">R</kbd> Reset heat</span>
                     <span>Click lane row to touch that lane</span>
                   </div>
-                  <Button onClick={() => { setConnected(true); saveConfig(); }} className="mt-2">Activate Manual Mode</Button>
+                  <Button onClick={() => { setConnStatus("connected"); saveConfig(); }} className="mt-2">Activate Manual Mode</Button>
                 </div>
               )}
 
@@ -614,7 +664,7 @@ export default function TimingConsolePage() {
                 <div className="rounded-lg bg-purple-950/30 border border-purple-800/40 p-4 text-sm">
                   <p className="font-semibold text-purple-300">Simulation Mode</p>
                   <p className="text-muted-foreground mt-1">Auto-generates realistic swim times for all seeded lanes. Use for testing and demonstrations. Click "Simulate Heat" in the Timing tab.</p>
-                  <Button onClick={() => { setConnected(true); saveConfig(); }} className="mt-3 bg-purple-700 hover:bg-purple-600">Activate Simulation</Button>
+                  <Button onClick={() => { setConnStatus("connected"); saveConfig(); }} className="mt-3 bg-purple-700 hover:bg-purple-600">Activate Simulation</Button>
                 </div>
               )}
             </CardContent>
