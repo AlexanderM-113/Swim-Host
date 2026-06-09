@@ -25,8 +25,8 @@ const DEFAULT_RULES = `Rules Governing Sanctioned Meets
 5. The competition course has been certified in accordance with 104.2.2C(4) as to pool length. A copy of such certification is on file with USA Swimming.
 6. The minimum water depth, measured in accordance with Article 103.2.3, is 13 feet, at the start end and 4 feet, at the turn end.
 7. Deck changes are prohibited.
-8. The Arizona Swimming Controlled Meet Warm-up and Safety Guidelines will be posted and enforced.
-9. No swimmer will be permitted to compete unless the swimmer is a member of USA Swimming. On deck registration is not available at any Arizona Swimming meet.
+8. Meet warm-up and safety guidelines will be posted and enforced.
+9. No swimmer will be permitted to compete unless the swimmer is a member of USA Swimming. On deck registration is not available.
 10. The use of audio or visual recording devices, including a cell phone, is not permitted in changing areas, restrooms, locker rooms, behind the starting blocks, or other areas as may be designated by the Meet Director/Meet Referee.
 11. All referees, starters, administrative officials, chief judges, and stroke and turn judges serving in an official capacity in a sanctioned event must be non-athlete members of USA Swimming or members of other FINA member organizations. All meet directors for meets sanctioned by USA Swimming must be members of USA Swimming. Except for coaches accompanying athletes participating under the provisions of 202.9 or USA Swimming's "open border" policy, all persons acting in any coaching capacity in a sanctioned event must be a coach member of USA Swimming.
 12. Officials and Meet Marshals must sign in and present proof of current membership and/or training respectively, to the Meet Referee prior to the start of each session of competition.
@@ -571,7 +571,7 @@ export default function MeetFlyer({ meetId }: { meetId: number }) {
                   <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
                   <div className="space-y-1.5 flex-1">
                     <Label>Sanctioned By</Label>
-                    <Input value={data.sanctionedBy} onChange={(e) => set("sanctionedBy", e.target.value)} placeholder="Arizona Swimming, Inc." />
+                    <Input value={data.sanctionedBy} onChange={(e) => set("sanctionedBy", e.target.value)} placeholder="e.g. Pacific Swimming, Inc." />
                   </div>
                 </div>
               </div>
@@ -599,7 +599,7 @@ export default function MeetFlyer({ meetId }: { meetId: number }) {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Hosted By</Label>
-                <Input value={data.hostedBy} onChange={(e) => set("hostedBy", e.target.value)} placeholder="Phoenix Swim Club" />
+                <Input value={data.hostedBy} onChange={(e) => set("hostedBy", e.target.value)} placeholder="Your club name" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
