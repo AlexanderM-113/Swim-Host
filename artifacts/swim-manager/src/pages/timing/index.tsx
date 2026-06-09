@@ -115,6 +115,10 @@ export default function TimingConsolePage() {
   const queryClient = useQueryClient();
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  // Holds the start timestamp when a remote "start" signal selects a new
+  // event/heat, so the reset effect (which fires on selection change) starts
+  // the clock instead of clearing it.
+  const pendingStartRef = useRef<number | null>(null);
 
   const allHeats: number[] = heatsData
     ? heatsData.map((h: any) => h.heatNumber).sort((a: number, b: number) => a - b)
@@ -132,10 +136,20 @@ export default function TimingConsolePage() {
 
   useEffect(() => {
     setLanes(buildLanes(eventLanes));
-    setElapsed(0);
-    setRunning(false);
     setCommitted(false);
-    setStartedAt(null);
+    // If a remote start signal just switched us to this event/heat, honor it
+    // and start the clock rather than resetting to a stopped state.
+    if (pendingStartRef.current != null) {
+      const at = pendingStartRef.current;
+      pendingStartRef.current = null;
+      setStartedAt(at);
+      setElapsed(0);
+      setRunning(true);
+    } else {
+      setElapsed(0);
+      setRunning(false);
+      setStartedAt(null);
+    }
   }, [selectedEvent, selectedHeat, eventLanes]);
 
   useEffect(() => {
@@ -178,12 +192,27 @@ export default function TimingConsolePage() {
     return subscribeToSignals((sig) => {
       if (selectedMeet && sig.meetId !== parseInt(selectedMeet)) return;
       if (sig.type === "start") {
+        const at = new Date(sig.at).getTime();
+        // Auto-select the meet/event/heat the Run screen started so the lane
+        // roster populates with real athletes instead of staying empty (NT).
+        const selectionChanges =
+          (sig.meetId != null && String(sig.meetId) !== selectedMeet) ||
+          (sig.eventId != null && String(sig.eventId) !== selectedEvent) ||
+          (sig.heatNumber != null && sig.heatNumber !== selectedHeat);
+        if (sig.meetId != null) setSelectedMeet(String(sig.meetId));
+        if (sig.eventId != null) setSelectedEvent(String(sig.eventId));
         if (sig.heatNumber != null) setSelectedHeat(sig.heatNumber);
-        setLanes(buildLanes(eventLanes));
-        setCommitted(false);
-        setStartedAt(new Date(sig.at).getTime());
-        setElapsed(0);
-        setRunning(true);
+        if (selectionChanges) {
+          // The reset effect will fire on the selection change; defer the clock
+          // start to it so it isn't immediately cleared.
+          pendingStartRef.current = at;
+        } else {
+          setLanes(buildLanes(eventLanes));
+          setCommitted(false);
+          setStartedAt(at);
+          setElapsed(0);
+          setRunning(true);
+        }
         if (connected && wsRef.current?.readyState === WebSocket.OPEN) {
           try { wsRef.current.send(JSON.stringify({ command: "start" })); } catch {}
         }
@@ -197,7 +226,7 @@ export default function TimingConsolePage() {
         setCommitted(false);
       }
     });
-  }, [selectedMeet, eventLanes, connected]);
+  }, [selectedMeet, selectedEvent, selectedHeat, eventLanes, connected]);
 
   const touchLane = useCallback((laneNum: number) => {
     if (!running) return;
