@@ -29,14 +29,14 @@ const PRELIMS_STEPS: WorkflowStep[] = [
   { id: "run-prelims", label: "Run Prelim Heats", description: "Execute each prelim heat and record finish times.", icon: Timer, href: "run" },
   { id: "import", label: "Import Times", description: "Import official results from timing system or enter manually.", icon: FileInput, href: "run" },
   { id: "rank", label: "Rank Finalists", description: "Review prelim results and generate the finals heat sheet.", icon: Medal, href: "run" },
-  { id: "generate", label: "Generate Finalists", description: "Confirm finalist list and prepare for finals session.", icon: List, href: "seeding" },
+  { id: "generate", label: "Generate Finalists", description: "Rank prelim results and generate the A/B/C finalist list.", icon: List, href: "finals" },
 ];
 
 const BETWEEN_STEPS: WorkflowStep[] = [
-  { id: "scratches", label: "Handle Scratches", description: "Process any scratches from athletes who won't compete in finals.", icon: RefreshCw, href: "athletes" },
-  { id: "alternates", label: "Promote Alternates", description: "Move alternates into vacated spots per competition rules.", icon: ArrowRight, href: "athletes" },
-  { id: "lock", label: "Lock Finalists", description: "Freeze the finals heat sheet — no more changes.", icon: Lock, action: "lock" },
-  { id: "reseed", label: "Re-Seed Finals", description: "Generate final lane assignments (circle seeding for championship).", icon: Shuffle, href: "seeding" },
+  { id: "scratches", label: "Handle Scratches", description: "Run the scratch-deadline timer; scratches auto-process when it expires.", icon: RefreshCw, href: "finals" },
+  { id: "alternates", label: "Promote Alternates", description: "Alternates are promoted into vacated finals spots automatically on re-seed.", icon: ArrowRight, href: "finals" },
+  { id: "lock", label: "Lock Finalists", description: "Freeze the finals heat sheet — no more changes.", icon: Lock, href: "finals" },
+  { id: "reseed", label: "Re-Seed Finals", description: "Generate final lane assignments (circle seeding for championship).", icon: Shuffle, href: "finals" },
 ];
 
 const FINALS_STEPS: WorkflowStep[] = [

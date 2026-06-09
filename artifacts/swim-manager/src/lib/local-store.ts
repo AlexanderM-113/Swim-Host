@@ -154,6 +154,33 @@ export interface Session {
   notes?: string;
 }
 
+// A single athlete's standing in an event's finals (championship / consolation
+// / alternate). `prelimTime`/`prelimRank` are snapshots taken when finalists
+// were generated so re-seeding stays stable even after finals times overwrite
+// the prelim result for the same entry.
+export interface Finalist {
+  entryId: number;
+  athleteId: number;
+  athleteName: string;
+  teamName: string;
+  prelimTime: number | null;
+  prelimRank: number;
+  finalName: string; // "A" | "B" | "C" | "" (alternate)
+  qualified: boolean;
+  alternate: boolean;
+  scratched: boolean;
+}
+
+export interface EventFinals {
+  eventId: number;
+  meetId: number;
+  numFinals: number; // number of final heats (1 = A only, 2 = A+B, 3 = A+B+C)
+  finalSize: number; // lanes per final
+  finalists: Finalist[];
+  locked: boolean;
+  generatedAt: string;
+}
+
 export interface Workout {
   id: number;
   name: string;
@@ -231,7 +258,7 @@ export interface ActivityItem {
 
 // ─── Store shape ─────────────────────────────────────────────────────────────
 
-interface AppStore {
+export interface AppStore {
   meets: Meet[];
   athletes: Athlete[];
   teams: Team[];
@@ -240,6 +267,7 @@ interface AppStore {
   heats: Heat[];
   results: Result[];
   sessions: Session[];
+  finals: EventFinals[];
   workouts: Workout[];
   invoices: Invoice[];
   paymentPlans: PaymentPlan[];
@@ -316,6 +344,7 @@ const DEFAULT_STORE: AppStore = {
   heats: [],
   results: [],
   sessions: [],
+  finals: [],
   workouts: SAMPLE_WORKOUTS,
   invoices: [],
   paymentPlans: [],
@@ -403,6 +432,8 @@ export const getGetWorkoutQueryKey = (id?: number) =>
   ["workout", id] as const;
 export const getGetMeetTeamScoresQueryKey = (meetId?: number) =>
   ["meetTeamScores", meetId] as const;
+export const getListFinalsQueryKey = (meetId?: number) =>
+  ["finals", meetId] as const;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -820,7 +851,7 @@ export function useListHeats(eventId?: number, options?: object) {
   });
 }
 
-function circleSeeding(numLanes: number): number[] {
+export function circleSeeding(numLanes: number): number[] {
   const mid = Math.ceil(numLanes / 2);
   const order: number[] = [mid];
   for (let i = 1; i <= numLanes; i++) {
