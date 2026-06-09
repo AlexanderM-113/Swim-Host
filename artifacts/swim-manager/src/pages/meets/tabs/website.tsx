@@ -1,5 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
-import { useListEvents, useListSessions, useUpdateEntry, useListAthletes, type Session } from "@/lib/local-store";
+import { useListEvents, useListSessions, useUpdateEntry, readStore, type Session } from "@/lib/local-store";
+import {
+  readScratchRequests,
+  setScratchStatus,
+  subscribeScratchRequests,
+} from "@/lib/scratch-requests";
+import { broadcastDataChanged, subscribeToSignals } from "@/lib/live-broadcast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,10 +17,10 @@ import {
   XCircle, Clock, User, FileText, ExternalLink, Wifi, WifiOff, Send
 } from "lucide-react";
 import { format } from "date-fns";
-import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 
 const BASE_URL = window.location.origin;
+const APP_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 interface ScratchRequest {
   id: string;
@@ -58,10 +64,8 @@ function QRCodeDisplay({ url }: { url: string }) {
 
 export default function MeetWebsite({ meetId }: { meetId: number }) {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
   const { data: events = [] } = useListEvents(meetId);
   const { data: sessions = [] } = useListSessions(meetId);
-  const { data: athletes = [] } = useListAthletes();
   const updateEntry = useUpdateEntry();
 
   const [scratchRequests, setScratchRequests] = useState<ScratchRequest[]>([]);
@@ -72,26 +76,49 @@ export default function MeetWebsite({ meetId }: { meetId: number }) {
   const [copied, setCopied] = useState(false);
   const [customMessage, setCustomMessage] = useState("");
 
-  const liveUrl = `${BASE_URL}/api/live/${meetId}`;
-  const meetSiteUrl = `${BASE_URL}/api/live/${meetId}`;
+  // Public, styled meet website (not the raw JSON API).
+  const liveUrl = `${BASE_URL}${APP_BASE}/live/${meetId}`;
+  const meetSiteUrl = liveUrl;
 
   const fetchScratchRequests = useCallback(async () => {
     setFetching(true);
+    // ScratchPad submissions are stored locally (same-browser sync). Merge in
+    // any server-side requests too, if an API server is running.
+    const local: ScratchRequest[] = readScratchRequests(meetId).map((r) => ({
+      id: r.id,
+      fullName: r.fullName,
+      dob: r.dob,
+      eventNumber: r.eventNumber,
+      eventName: r.eventName,
+      reason: r.reason,
+      signature: r.signature,
+      timestamp: r.timestamp,
+      meetId: String(r.meetId),
+      status: r.status,
+    }));
+    let merged = local;
     try {
       const res = await fetch(`/api/live/${meetId}/scratchings`);
       if (res.ok) {
-        const data = await res.json();
-        setScratchRequests(data);
+        const remote: ScratchRequest[] = await res.json();
+        const seen = new Set(local.map((r) => r.id));
+        merged = [...local, ...remote.filter((r) => !seen.has(r.id))];
       }
     } catch {}
+    merged.sort((a, b) => (b.timestamp ?? "").localeCompare(a.timestamp ?? ""));
+    setScratchRequests(merged);
     setFetching(false);
   }, [meetId]);
 
   useEffect(() => {
     fetchScratchRequests();
     const interval = setInterval(fetchScratchRequests, 15_000);
-    return () => clearInterval(interval);
-  }, [fetchScratchRequests]);
+    const offLocal = subscribeScratchRequests(meetId, fetchScratchRequests);
+    const offSignal = subscribeToSignals((s) => {
+      if (s.meetId === meetId) fetchScratchRequests();
+    });
+    return () => { clearInterval(interval); offLocal(); offSignal(); };
+  }, [fetchScratchRequests, meetId]);
 
   async function pushToLive() {
     setPushing(true);
@@ -131,35 +158,50 @@ export default function MeetWebsite({ meetId }: { meetId: number }) {
 
   async function handleScratchDecision(req: ScratchRequest, decision: "approved" | "denied") {
     const newStatus = decision;
+    // Persist status: locally-stored requests via the shared store, plus a
+    // best-effort PATCH to the API server if one is serving this meet.
+    const isLocal = readScratchRequests(meetId).some((r) => r.id === req.id);
+    if (isLocal) setScratchStatus(meetId, req.id, newStatus);
     try {
       await fetch(`/api/live/${meetId}/scratch/${req.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
       });
+    } catch {}
 
-      if (decision === "approved") {
-        const evNum = parseInt(req.eventNumber);
-        const matchingEvent = events.find((e) => e.eventNumber === evNum);
-        if (matchingEvent) {
-          const athlete = athletes.find((a: any) =>
-            `${a.firstName} ${a.lastName}`.toLowerCase() === req.fullName.toLowerCase()
-          );
-          toast({
-            title: "Scratch approved",
-            description: `${req.fullName} — Event ${req.eventNumber}. ${athlete ? "Entry marked as scratched in Meet Manager." : "Note: Athlete not found in roster — scratch manually."}`,
-          });
-        } else {
-          toast({ title: "Scratch approved", description: `${req.fullName} marked scratched for Event ${req.eventNumber}.` });
-        }
+    if (decision === "approved") {
+      // Workflow: identify athlete/event → flip entry status → propagate.
+      const evNum = parseInt(req.eventNumber);
+      const matchingEvent = events.find((e) => e.eventNumber === evNum);
+      const store = readStore();
+      const entry = matchingEvent
+        ? store.entries.find((en) => {
+            if (en.eventId !== matchingEvent.id) return false;
+            const ath = store.athletes.find((a) => a.id === en.athleteId);
+            const name = ath ? `${ath.firstName} ${ath.lastName}` : en.athleteName ?? "";
+            return name.toLowerCase() === req.fullName.toLowerCase();
+          })
+        : undefined;
+      if (entry) {
+        await updateEntry.mutateAsync({ id: entry.id, data: { scratched: true } });
+        broadcastDataChanged(meetId);
+        toast({
+          title: "Scratch approved",
+          description: `${req.fullName} — Event ${req.eventNumber}. Entry marked scratched; seeding/heat sheets will update.`,
+        });
       } else {
-        toast({ title: "Scratch denied", description: `${req.fullName} — Event ${req.eventNumber} scratch was denied.` });
+        toast({
+          title: "Scratch approved",
+          description: `${req.fullName} — Event ${req.eventNumber}. Athlete/entry not found — please scratch manually in the roster.`,
+          variant: "destructive",
+        });
       }
-
-      setScratchRequests((prev) => prev.map((r) => r.id === req.id ? { ...r, status: newStatus } : r));
-    } catch {
-      toast({ title: "Error updating scratch", variant: "destructive" });
+    } else {
+      toast({ title: "Scratch denied", description: `${req.fullName} — Event ${req.eventNumber} scratch was denied.` });
     }
+
+    setScratchRequests((prev) => prev.map((r) => r.id === req.id ? { ...r, status: newStatus } : r));
   }
 
   function copyUrl() {
@@ -222,6 +264,11 @@ export default function MeetWebsite({ meetId }: { meetId: number }) {
                 <Input value={liveUrl} readOnly className="font-mono text-xs" />
                 <Button size="icon" variant="outline" onClick={copyUrl}>
                   {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                </Button>
+                <Button size="icon" variant="outline" asChild>
+                  <a href={meetSiteUrl} target="_blank" rel="noreferrer" title="Open live website">
+                    <ExternalLink className="h-4 w-4" />
+                  </a>
                 </Button>
               </div>
 
