@@ -12,6 +12,7 @@ import { OfflineBanner } from "@/components/offline-banner";
 import { ErrorBoundary } from "@/components/error-boundary";
 import NotFound from "@/pages/not-found";
 
+import LiveSite from "@/pages/live";
 import Dashboard from "@/pages/dashboard";
 import Meets from "@/pages/meets";
 import NewMeet from "@/pages/meets/new";
@@ -90,6 +91,16 @@ function GlobalErrorHandler() {
 }
 
 function Router() {
+  return (
+    <Switch>
+      {/* Public, full-bleed meet website — rendered without the app shell. */}
+      <Route path="/live/:meetId" component={LiveSite} />
+      <Route component={AppShell} />
+    </Switch>
+  );
+}
+
+function AppShell() {
   return (
     <Layout>
       <LaunchModal />
