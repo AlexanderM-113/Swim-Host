@@ -21,6 +21,7 @@ import MeetWebsite from "./tabs/website";
 import MeetWorkflow from "./tabs/workflow";
 import MeetFinals from "./tabs/finals";
 import MeetRoster from "./tabs/meet-roster";
+import MeetFlyer from "./tabs/flyer";
 
 export default function MeetDetail() {
   const [match, params] = useRoute("/meets/:id/*?");
@@ -54,6 +55,7 @@ export default function MeetDetail() {
     { label: "Officials", value: "officials", href: `/meets/${meetId}/officials` },
     { label: "Team Scores", value: "scores", href: `/meets/${meetId}/scores` },
     { label: "Website & Live", value: "website", href: `/meets/${meetId}/website` },
+    { label: "Meet Flyer", value: "flyer", href: `/meets/${meetId}/flyer` },
     ...(isPrelimFinal ? [{ label: "Workflow", value: "workflow", href: `/meets/${meetId}/workflow` }] : []),
     ...(isPrelimFinal ? [{ label: "Finals", value: "finals", href: `/meets/${meetId}/finals` }] : []),
   ];
@@ -119,6 +121,7 @@ export default function MeetDetail() {
             <Route path={`/meets/${meetId}/officials`}><MeetOfficials meetId={meetId} /></Route>
             <Route path={`/meets/${meetId}/scores`}><MeetTeamScores meetId={meetId} /></Route>
             <Route path={`/meets/${meetId}/website`}><MeetWebsite meetId={meetId} /></Route>
+            <Route path={`/meets/${meetId}/flyer`}><MeetFlyer meetId={meetId} /></Route>
             <Route path={`/meets/${meetId}/workflow`}><MeetWorkflow meetId={meetId} /></Route>
             <Route path={`/meets/${meetId}/finals`}><MeetFinals meetId={meetId} /></Route>
           </Switch>
