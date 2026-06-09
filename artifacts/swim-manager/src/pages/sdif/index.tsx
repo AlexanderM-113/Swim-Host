@@ -17,8 +17,12 @@ import {
 } from "@/lib/sdif";
 import { formatTime } from "@/lib/format-time";
 import {
+  importMeetEntriesCSV, exportMeetEntriesCSV, exportMeetEventsCSV, downloadCSV,
+  type CSVImportResult,
+} from "@/lib/csv";
+import {
   Upload, Download, FileText, CheckCircle2, AlertTriangle, Loader2,
-  Users, Calendar, Trophy
+  Users, Calendar, Trophy, FileSpreadsheet
 } from "lucide-react";
 
 // ─── SDIF date parsing (MMDDYYYY → YYYY-MM-DD) ───────────────────────────────
@@ -711,6 +715,124 @@ function DownloadAppTab() {
 
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
+// ─── CSV (High School) Tab ───────────────────────────────────────────────────
+
+function CSVTab() {
+  const { data: meets } = useListMeets();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [selectedMeet, setSelectedMeet] = useState("");
+  const [result, setResult] = useState<CSVImportResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) { e.target.value = ""; }
+    if (!file) return;
+    setError(null);
+    setResult(null);
+    if (!selectedMeet) {
+      setError("Pick the meet to import entries into first.");
+      return;
+    }
+    try {
+      const text = await file.text();
+      const res = importMeetEntriesCSV(parseInt(selectedMeet, 10), text);
+      setResult(res);
+      toast({ title: "CSV imported", description: `${res.entries} entries across ${res.events} events.` });
+    } catch (err: any) {
+      const msg = err?.message ?? "Import failed";
+      setError(msg);
+      toast({ title: "CSV import failed", description: msg, variant: "destructive" });
+    }
+  }
+
+  function doExport(kind: "entries" | "events") {
+    if (!selectedMeet) { toast({ title: "Select a meet first", variant: "destructive" }); return; }
+    const meetId = parseInt(selectedMeet, 10);
+    const meet = meets?.find((m) => m.id === meetId);
+    const safe = (meet?.name ?? "meet").replace(/[^a-zA-Z0-9]/g, "_");
+    const csv = kind === "entries" ? exportMeetEntriesCSV(meetId) : exportMeetEventsCSV(meetId);
+    downloadCSV(`${safe}_${kind}.csv`, csv);
+    toast({ title: `Exported ${kind} CSV` });
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileSpreadsheet className="h-5 w-5 text-primary" /> CSV Entries &amp; Events (High School)
+          </CardTitle>
+          <CardDescription>
+            Import or export a meet's entries and events as a plain spreadsheet. Useful for high-school
+            meets that don't use SD3. Entries import into the meet you select below.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="space-y-1.5">
+            <Label>Meet</Label>
+            <Select value={selectedMeet} onValueChange={setSelectedMeet}>
+              <SelectTrigger><SelectValue placeholder="Select a meet…" /></SelectTrigger>
+              <SelectContent>
+                {meets?.map((m) => (
+                  <SelectItem key={m.id} value={String(m.id)}>
+                    {m.name}<span className="ml-1 text-muted-foreground text-xs">({m.status})</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleImport} />
+            <Button onClick={() => fileRef.current?.click()} disabled={!selectedMeet}>
+              <Upload className="h-4 w-4 mr-2" /> Import Entries CSV
+            </Button>
+            <Button variant="outline" onClick={() => doExport("entries")} disabled={!selectedMeet}>
+              <Download className="h-4 w-4 mr-2" /> Export Entries
+            </Button>
+            <Button variant="outline" onClick={() => doExport("events")} disabled={!selectedMeet}>
+              <Download className="h-4 w-4 mr-2" /> Export Events
+            </Button>
+          </div>
+
+          <div className="rounded-lg bg-muted/50 p-4 text-sm text-muted-foreground space-y-1">
+            <p className="font-semibold text-foreground">Expected columns (flexible, case-insensitive)</p>
+            <p><code>Last Name, First Name</code> (or a single <code>Name</code>), <code>Gender</code>, <code>Team</code> /
+              <code>School</code>, <code>Event</code> (e.g. <code>Boys 200 IM</code>), <code>Seed Time</code> (e.g.
+              <code>1:02.34</code> or <code>NT</code>), <code>Course</code>.</p>
+            <p>Events are created automatically from the Event column; teams and athletes are matched by name or created.</p>
+          </div>
+
+          {error && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          {result && (
+            <Alert>
+              <CheckCircle2 className="h-4 w-4" />
+              <AlertDescription>
+                Imported <b>{result.entries}</b> entries, <b>{result.events}</b> new events,
+                <b> {result.athletes}</b> athletes, <b>{result.teams}</b> teams.
+                {result.skipped > 0 && <> Skipped {result.skipped} row(s).</>}
+                {result.errors.length > 0 && (
+                  <ul className="mt-2 list-disc pl-5 text-xs">
+                    {result.errors.slice(0, 8).map((e, i) => <li key={i}>{e}</li>)}
+                  </ul>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function SDIFPage() {
   return (
     <div className="space-y-6">
@@ -729,6 +851,9 @@ export default function SDIFPage() {
           <TabsTrigger value="export" className="gap-2">
             <Download className="h-3.5 w-3.5" /> Export
           </TabsTrigger>
+          <TabsTrigger value="csv" className="gap-2">
+            <FileSpreadsheet className="h-3.5 w-3.5" /> CSV (High School)
+          </TabsTrigger>
           <TabsTrigger value="download" className="gap-2">
             <FileText className="h-3.5 w-3.5" /> Download App
           </TabsTrigger>
@@ -738,6 +863,9 @@ export default function SDIFPage() {
         </TabsContent>
         <TabsContent value="export" className="mt-6">
           <ExportTab />
+        </TabsContent>
+        <TabsContent value="csv" className="mt-6">
+          <CSVTab />
         </TabsContent>
         <TabsContent value="download" className="mt-6">
           <DownloadAppTab />
