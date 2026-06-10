@@ -37,6 +37,10 @@ export interface Athlete {
   dateOfBirth?: string;
   teamId?: number;
   teamName?: string;
+  // When set, this athlete belongs only to a hosted meet's roster (Meet
+  // Manager) and is kept separate from the global Team Manager roster.
+  // undefined = a Team Manager / club athlete.
+  meetId?: number;
   idNumber?: string;
   idFormat?: string;
   phone?: string;
@@ -582,9 +586,119 @@ export function useListAthletes() {
     queryKey: ["athletes"],
     queryFn: () => {
       const { athletes, teams } = readStore();
-      return enrichAthletes(athletes, teams);
+      // Team Manager only shows club athletes — meet-scoped roster athletes
+      // (those with a meetId) are managed inside the meet's Meet Roster.
+      return enrichAthletes(athletes.filter((a) => a.meetId == null), teams);
     },
     staleTime: 0,
+  });
+}
+
+export const getMeetRosterAthletesQueryKey = (meetId?: number) =>
+  ["meet-roster-athletes", meetId] as const;
+
+/** Athletes that make up a hosted meet's roster (the entry pool for the meet). */
+export function useListMeetRosterAthletes(meetId?: number) {
+  return useQuery({
+    queryKey: getMeetRosterAthletesQueryKey(meetId),
+    queryFn: () => {
+      const { athletes, teams } = readStore();
+      return enrichAthletes(athletes.filter((a) => a.meetId === meetId), teams);
+    },
+    staleTime: 0,
+    enabled: meetId != null,
+  });
+}
+
+/** Add a single athlete directly to a meet's roster (meet-scoped). */
+export function useAddMeetRosterAthlete() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ meetId, data }: { meetId: number; data: Omit<Athlete, "id" | "createdAt" | "meetId"> }) => {
+      const store = readStore();
+      const athlete: Athlete = {
+        ...data,
+        id: nextId(store.athletes),
+        meetId,
+        active: data.active ?? true,
+        createdAt: now(),
+      };
+      writeStore({ ...store, athletes: [...store.athletes, athlete] });
+      return athlete;
+    },
+    onSuccess: (_r, { meetId }) =>
+      queryClient.invalidateQueries({ queryKey: getMeetRosterAthletesQueryKey(meetId) }),
+  });
+}
+
+/**
+ * Copy selected Team Manager (club) athletes into a meet's roster as new
+ * meet-scoped records. The originals stay in Team Manager untouched; this just
+ * makes them available as entries for the hosted meet.
+ */
+export function useImportAthletesFromTeamManager() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ meetId, athleteIds }: { meetId: number; athleteIds: number[] }) => {
+      const store = readStore();
+      const ids = new Set(athleteIds);
+      const existingKeys = new Set(
+        store.athletes
+          .filter((a) => a.meetId === meetId)
+          .map((a) => `${a.firstName.toLowerCase()}:${a.lastName.toLowerCase()}:${a.teamId ?? ""}`)
+      );
+      const copies: Athlete[] = [];
+      let nextAthleteId = nextId(store.athletes);
+      for (const src of store.athletes) {
+        if (src.meetId != null || !ids.has(src.id)) continue;
+        const key = `${src.firstName.toLowerCase()}:${src.lastName.toLowerCase()}:${src.teamId ?? ""}`;
+        if (existingKeys.has(key)) continue;
+        existingKeys.add(key);
+        copies.push({
+          ...src,
+          id: nextAthleteId++,
+          meetId,
+          createdAt: now(),
+        });
+      }
+      writeStore({ ...store, athletes: [...store.athletes, ...copies] });
+      return { imported: copies.length };
+    },
+    onSuccess: (_r, { meetId }) =>
+      queryClient.invalidateQueries({ queryKey: getMeetRosterAthletesQueryKey(meetId) }),
+  });
+}
+
+/**
+ * Remove an athlete from a meet's roster, along with any entries that
+ * referenced them. Only affects meet-scoped athletes.
+ */
+export function useDeleteMeetRosterAthlete() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ meetId, athleteId }: { meetId: number; athleteId: number }) => {
+      const store = readStore();
+      const target = store.athletes.find((a) => a.id === athleteId);
+      if (!target || target.meetId !== meetId) return;
+      const removedEventIds = new Set(
+        store.entries.filter((e) => e.athleteId === athleteId).map((e) => e.eventId)
+      );
+      writeStore({
+        ...store,
+        athletes: store.athletes.filter((a) => a.id !== athleteId),
+        entries: store.entries.filter((e) => e.athleteId !== athleteId),
+        results: store.results.filter((r) => {
+          const entry = store.entries.find((e) => e.id === r.entryId);
+          return entry ? entry.athleteId !== athleteId : true;
+        }),
+      });
+      return { removedEventIds: [...removedEventIds] };
+    },
+    onSuccess: (_r, { meetId }) => {
+      queryClient.invalidateQueries({ queryKey: getMeetRosterAthletesQueryKey(meetId) });
+      queryClient.invalidateQueries({ queryKey: ["entries"] });
+      queryClient.invalidateQueries({ queryKey: getListEventsQueryKey(meetId) });
+    },
   });
 }
 

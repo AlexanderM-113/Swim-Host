@@ -90,8 +90,12 @@ function importSDIFLocally(sdif: SDIFFile): {
     for (const e of sdifTeam.entries) {
       const key = `${e.athleteFirstName}:${e.athleteLastName}:${teamId}`;
       if (!athleteIdMap.has(key)) {
+        // Imported athletes belong to this hosted meet's roster (meet-scoped),
+        // keeping them separate from the global Team Manager roster. Only
+        // dedupe against athletes already in THIS meet's roster.
         const existing = store.athletes.find(
           (a) =>
+            a.meetId === meet.id &&
             a.firstName.toLowerCase() === e.athleteFirstName.toLowerCase() &&
             a.lastName.toLowerCase() === e.athleteLastName.toLowerCase() &&
             a.teamId === teamId
@@ -105,6 +109,7 @@ function importSDIFLocally(sdif: SDIFFile): {
             lastName: e.athleteLastName,
             gender: e.gender,
             teamId,
+            meetId: meet.id,
             idNumber: e.ussNumber || undefined,
             dateOfBirth: parseSdifDate(e.dateOfBirth),
             active: true,

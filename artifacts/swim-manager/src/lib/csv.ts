@@ -199,8 +199,12 @@ export function importMeetEntriesCSV(meetId: number, text: string): CSVImportRes
   function findOrCreateAthlete(first: string, last: string, gender: string, teamId: number): number {
     const key = `${first.toLowerCase()}:${last.toLowerCase()}:${teamId}`;
     if (athleteByKey.has(key)) return athleteByKey.get(key)!;
+    // CSV-imported entries feed a hosted meet, so created athletes are
+    // meet-scoped (part of the Meet Roster), separate from Team Manager.
+    // Only dedupe against athletes already in this meet's roster.
     const existing = store.athletes.find(
       (a) =>
+        a.meetId === meetId &&
         a.firstName.toLowerCase() === first.toLowerCase() &&
         a.lastName.toLowerCase() === last.toLowerCase() &&
         a.teamId === teamId
@@ -212,6 +216,7 @@ export function importMeetEntriesCSV(meetId: number, text: string): CSVImportRes
       lastName: last,
       gender,
       teamId,
+      meetId,
       active: true,
       createdAt: new Date().toISOString(),
     };

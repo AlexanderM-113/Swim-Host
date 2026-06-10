@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  useListEvents, useListEntries, useListAthletes, useListTeams,
+  useListEvents, useListEntries, useListMeetRosterAthletes, useListTeams,
   useCreateEntry, useUpdateEntry, useDeleteEntry,
   getListEntriesQueryKey,
 } from "@/lib/local-store";
@@ -20,7 +20,9 @@ import { Plus, MoreHorizontal, Trash2, Scissors, RotateCcw } from "lucide-react"
 
 export default function MeetAthletes({ meetId }: { meetId: number }) {
   const { data: events } = useListEvents(meetId);
-  const { data: athletes } = useListAthletes();
+  // Entries for a hosted meet are drawn from the Meet Roster (the meet-scoped
+  // entry pool), NOT the global Team Manager athlete list.
+  const { data: athletes } = useListMeetRosterAthletes(meetId);
   const { data: teams } = useListTeams();
   const [selectedEvent, setSelectedEvent] = useState<string>("");
   const [addOpen, setAddOpen] = useState(false);
@@ -54,6 +56,7 @@ export default function MeetAthletes({ meetId }: { meetId: number }) {
     createEntry.mutate(
       {
         data: {
+          meetId,
           eventId: parseInt(selectedEvent),
           athleteId: parseInt(newAthleteId),
           seedTime: seedTimeSec ?? undefined,
@@ -255,7 +258,11 @@ export default function MeetAthletes({ meetId }: { meetId: number }) {
                     );
                   })}
                   {availableAthletes.length === 0 && (
-                    <SelectItem value="none" disabled>All athletes already entered</SelectItem>
+                    <SelectItem value="none" disabled>
+                      {(athletes?.length ?? 0) === 0
+                        ? "No athletes in the Meet Roster yet"
+                        : "All roster athletes already entered"}
+                    </SelectItem>
                   )}
                 </SelectContent>
               </Select>
