@@ -237,6 +237,23 @@ export interface PaymentPlan {
   createdAt: string;
 }
 
+export interface Payment {
+  id: number;
+  invoiceId?: number;
+  athleteId?: number;
+  athleteName?: string;
+  amount: number;
+  // "stripe" | "square" | "paypal" | "manual"
+  provider: string;
+  // e.g. "card", "cash", "check", "online"
+  method: string;
+  // External transaction / reference id (check #, Stripe session id, etc.)
+  reference?: string;
+  status: "succeeded" | "pending" | "refunded";
+  note?: string;
+  createdAt: string;
+}
+
 export interface TimeStandard {
   id: number;
   name: string;
@@ -291,6 +308,7 @@ export interface AppStore {
   workouts: Workout[];
   invoices: Invoice[];
   paymentPlans: PaymentPlan[];
+  payments: Payment[];
   timeStandards: TimeStandard[];
   club: Club;
 }
@@ -369,6 +387,7 @@ const DEFAULT_STORE: AppStore = {
   workouts: SAMPLE_WORKOUTS,
   invoices: [],
   paymentPlans: [],
+  payments: [],
   timeStandards: [],
   club: { id: 1, name: "My Swimming Club" },
 };
@@ -1253,6 +1272,46 @@ export function useGetBillingSummary() {
       };
     },
     staleTime: 0,
+  });
+}
+
+export function useListPayments() {
+  return useQuery({
+    queryKey: ["payments"],
+    queryFn: () => (readStore().payments ?? []).slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    staleTime: 0,
+  });
+}
+
+/**
+ * Record a payment against an invoice (or standalone) and, when it succeeds,
+ * mark the linked invoice paid. Used by both the online-checkout flow
+ * ("pending" until confirmed) and manual cash/check entry ("succeeded").
+ */
+export function useRecordPayment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ data }: { data: Omit<Payment, "id" | "createdAt"> }) => {
+      const store = readStore();
+      const athlete = data.athleteId ? store.athletes.find((a) => a.id === data.athleteId) : null;
+      const payment: Payment = {
+        ...data,
+        id: nextId(store.payments ?? []),
+        athleteName: athlete ? `${athlete.firstName} ${athlete.lastName}` : data.athleteName,
+        createdAt: now(),
+      };
+      let invoices = store.invoices;
+      if (data.invoiceId != null && data.status === "succeeded") {
+        invoices = invoices.map((inv) => (inv.id === data.invoiceId ? { ...inv, status: "paid" } : inv));
+      }
+      writeStore({ ...store, payments: [...(store.payments ?? []), payment], invoices });
+      return payment;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["payments"] });
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["billingSummary"] });
+    },
   });
 }
 
