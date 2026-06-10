@@ -140,7 +140,13 @@ export interface Result {
   ns: boolean;
   dnf: boolean;
   splits?: string;
+  // Which round this result belongs to. Undefined = legacy/timed-final (treated
+  // as a prelim). Prelims and finals are stored as separate Result rows for the
+  // same entry so a finals swim never overwrites the prelim swim.
+  round?: ResultRound;
 }
+
+export type ResultRound = "prelim" | "final";
 
 export interface Session {
   id: number;
@@ -237,6 +243,23 @@ export interface PaymentPlan {
   createdAt: string;
 }
 
+export interface Payment {
+  id: number;
+  invoiceId?: number;
+  athleteId?: number;
+  athleteName?: string;
+  amount: number;
+  // "stripe" | "square" | "paypal" | "manual"
+  provider: string;
+  // e.g. "card", "cash", "check", "online"
+  method: string;
+  // External transaction / reference id (check #, Stripe session id, etc.)
+  reference?: string;
+  status: "succeeded" | "pending" | "refunded";
+  note?: string;
+  createdAt: string;
+}
+
 export interface TimeStandard {
   id: number;
   name: string;
@@ -291,6 +314,7 @@ export interface AppStore {
   workouts: Workout[];
   invoices: Invoice[];
   paymentPlans: PaymentPlan[];
+  payments: Payment[];
   timeStandards: TimeStandard[];
   club: Club;
 }
@@ -369,6 +393,7 @@ const DEFAULT_STORE: AppStore = {
   workouts: SAMPLE_WORKOUTS,
   invoices: [],
   paymentPlans: [],
+  payments: [],
   timeStandards: [],
   club: { id: 1, name: "My Swimming Club" },
 };
@@ -477,21 +502,52 @@ function enrichEvents(events: Event[], entries: Entry[], heats: Heat[]): Event[]
   }));
 }
 
+/** The round a Result belongs to (legacy/undefined → prelim). */
+export function roundOf(r: Result): ResultRound {
+  return r.round === "final" ? "final" : "prelim";
+}
+
+/** True once finals have been generated for an event (its live heats are finals). */
+export function eventHasFinals(store: AppStore, eventId: number): boolean {
+  return store.finals.some((f) => f.eventId === eventId);
+}
+
+/** Find an entry's result for a specific round. */
+export function resultForRound(
+  results: Result[],
+  entryId: number,
+  round: ResultRound
+): Result | undefined {
+  return results.find((r) => r.entryId === entryId && roundOf(r) === round);
+}
+
+/**
+ * The result used for placing / scoring / standings: the finals swim when one
+ * exists, otherwise the prelim/timed-final swim.
+ */
+export function effectiveResult(results: Result[], entryId: number): Result | undefined {
+  const rs = results.filter((r) => r.entryId === entryId);
+  return rs.find((r) => roundOf(r) === "final") ?? rs.find((r) => roundOf(r) === "prelim");
+}
+
 function populateHeatLanes(
   heats: Heat[],
   entries: Entry[],
   athletes: Athlete[],
   teams: Team[],
-  results: Result[]
+  results: Result[],
+  finalsEventIds: Set<number>
 ): Heat[] {
-  return heats.map((heat) => ({
+  return heats.map((heat) => {
+    const round: ResultRound = finalsEventIds.has(heat.eventId) ? "final" : "prelim";
+    return {
     ...heat,
     lanes: heat.lanes.map((lane) => {
       if (!lane.entryId) return lane;
       const entry = entries.find((e) => e.id === lane.entryId);
       const athlete = entry ? athletes.find((a) => a.id === entry.athleteId) : null;
       const team = athlete?.teamId ? teams.find((t) => t.id === athlete.teamId) : null;
-      const result = entry ? results.find((r) => r.entryId === entry.id) : null;
+      const result = entry ? resultForRound(results, entry.id, round) : null;
       return {
         ...lane,
         athleteName: athlete
@@ -507,7 +563,8 @@ function populateHeatLanes(
         splits: result?.splits,
       };
     }),
-  }));
+    };
+  });
 }
 
 // ─── Meets ────────────────────────────────────────────────────────────────────
@@ -865,7 +922,8 @@ export function useListHeats(eventId?: number, options?: object) {
         store.entries,
         store.athletes,
         store.teams,
-        store.results
+        store.results,
+        new Set(store.finals.map((f) => f.eventId))
       );
     },
     staleTime: 0,
@@ -1005,14 +1063,21 @@ export function useSetResult() {
       };
     }) => {
       const store = readStore();
-      const existing = store.results.find((r) => r.entryId === data.entryId);
+      // Results are entered into the event's current round. Once finals have
+      // been generated the live heats are finals, so the entry's prelim swim is
+      // preserved and the finals swim is stored as a separate Result row.
+      const round: ResultRound = eventHasFinals(store, eventId) ? "final" : "prelim";
+      const existing = store.results.find(
+        (r) => r.entryId === data.entryId && roundOf(r) === round
+      );
       let results: Result[];
       if (existing) {
         results = store.results.map((r) =>
-          r.entryId === data.entryId
+          r.id === existing.id
             ? {
                 ...r,
                 ...data,
+                round,
                 dq: data.dq ?? false,
                 ns: data.ns ?? false,
                 dnf: data.dnf ?? false,
@@ -1024,6 +1089,7 @@ export function useSetResult() {
           id: nextId(store.results),
           entryId: data.entryId,
           eventId,
+          round,
           finishTime: data.finishTime,
           place: data.place,
           dq: data.dq ?? false,
@@ -1046,7 +1112,7 @@ export function useSetResult() {
       writeStore({ ...store, results, events });
       queryClient.invalidateQueries({ queryKey: getListHeatsQueryKey(eventId) });
       if (event) queryClient.invalidateQueries({ queryKey: getListEventsQueryKey(event.meetId) });
-      return results.find((r) => r.entryId === data.entryId)!;
+      return results.find((r) => r.entryId === data.entryId && roundOf(r) === round)!;
     },
   });
 }
@@ -1128,8 +1194,18 @@ export function useGetMeetTeamScores(meetId?: number, options?: object) {
       const store = readStore();
       const scoreMap = new Map<number, { teamId: number; teamName: string; score: number }>();
       const meetEvents = store.events.filter((e) => e.meetId === meetId).map((e) => e.id);
-      store.results.forEach((result) => {
-        if (!meetEvents.includes(result.eventId) || result.dq || result.ns || result.dnf) return;
+      // Score one result per entry: the finals swim when present, else the
+      // prelim/timed-final swim — so a swimmer is never counted twice.
+      const scoredByEntry = new Map<number, Result>();
+      for (const result of store.results) {
+        if (!meetEvents.includes(result.eventId)) continue;
+        const cur = scoredByEntry.get(result.entryId);
+        if (!cur || (roundOf(result) === "final" && roundOf(cur) !== "final")) {
+          scoredByEntry.set(result.entryId, result);
+        }
+      }
+      Array.from(scoredByEntry.values()).forEach((result) => {
+        if (result.dq || result.ns || result.dnf) return;
         const entry = store.entries.find((e) => e.id === result.entryId);
         if (!entry) return;
         const athlete = store.athletes.find((a) => a.id === entry.athleteId);
@@ -1253,6 +1329,46 @@ export function useGetBillingSummary() {
       };
     },
     staleTime: 0,
+  });
+}
+
+export function useListPayments() {
+  return useQuery({
+    queryKey: ["payments"],
+    queryFn: () => (readStore().payments ?? []).slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    staleTime: 0,
+  });
+}
+
+/**
+ * Record a payment against an invoice (or standalone) and, when it succeeds,
+ * mark the linked invoice paid. Used by both the online-checkout flow
+ * ("pending" until confirmed) and manual cash/check entry ("succeeded").
+ */
+export function useRecordPayment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ data }: { data: Omit<Payment, "id" | "createdAt"> }) => {
+      const store = readStore();
+      const athlete = data.athleteId ? store.athletes.find((a) => a.id === data.athleteId) : null;
+      const payment: Payment = {
+        ...data,
+        id: nextId(store.payments ?? []),
+        athleteName: athlete ? `${athlete.firstName} ${athlete.lastName}` : data.athleteName,
+        createdAt: now(),
+      };
+      let invoices = store.invoices;
+      if (data.invoiceId != null && data.status === "succeeded") {
+        invoices = invoices.map((inv) => (inv.id === data.invoiceId ? { ...inv, status: "paid" } : inv));
+      }
+      writeStore({ ...store, payments: [...(store.payments ?? []), payment], invoices });
+      return payment;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["payments"] });
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["billingSummary"] });
+    },
   });
 }
 

@@ -9,6 +9,7 @@ import {
   writeStore,
   nextId,
   circleSeeding,
+  resultForRound,
   getListFinalsQueryKey,
   getListHeatsQueryKey,
   getListEventsQueryKey,
@@ -49,7 +50,7 @@ export function rankPrelims(store: AppStore, eventId: number) {
   const entries = store.entries.filter((e) => e.eventId === eventId && !e.scratched);
   return entries
     .map((en) => {
-      const r = store.results.find((rr) => rr.entryId === en.id);
+      const r = resultForRound(store.results, en.id, "prelim");
       const valid = r && !r.dq && !r.ns && !r.dnf && r.finishTime != null;
       const athlete = store.athletes.find((a) => a.id === en.athleteId);
       const team = athlete?.teamId ? store.teams.find((t) => t.id === athlete.teamId) : null;

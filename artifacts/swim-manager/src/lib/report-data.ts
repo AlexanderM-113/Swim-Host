@@ -8,6 +8,7 @@
 
 import {
   readStore,
+  resultForRound,
   type Meet,
   type Team,
   type Athlete,
@@ -16,6 +17,7 @@ import {
   type Result,
   type Heat,
   type Invoice,
+  type EventFinals,
 } from "@/lib/local-store";
 
 export class ReportError extends Error {}
@@ -62,6 +64,7 @@ interface StoreView {
   heats: Heat[];
   results: Result[];
   invoices: Invoice[];
+  finals: EventFinals[];
 }
 
 function load(): StoreView {
@@ -75,6 +78,7 @@ function load(): StoreView {
     heats: s.heats,
     results: s.results,
     invoices: s.invoices,
+    finals: s.finals,
   };
 }
 
@@ -208,43 +212,82 @@ export function buildSplitSheet(meetId: number) {
 export function buildResults(meetId: number) {
   const s = load();
   const meet = requireMeet(s, meetId);
-  const events = meetEvents(s, meetId).map((event) => {
-    const entries = s.entries.filter((e) => e.eventId === event.id && !e.scratched);
-    const results = entries
-      .map((entry) => {
-        const result = s.results.find((r) => r.entryId === entry.id);
-        if (!result) return null;
-        const athlete = s.athletes.find((a) => a.id === entry.athleteId);
-        const team = athlete?.teamId ? s.teams.find((t) => t.id === athlete.teamId) : null;
-        return {
-          place: result.place ?? null,
-          athleteName: athlete ? fullName(athlete) : entry.athleteName ?? "Unknown",
-          teamAbbreviation: teamAbbrev(team),
-          age: ageAsOf(athlete?.dateOfBirth, meet),
-          seedTime: entry.seedTime ?? null,
-          finishTime: result.finishTime ?? null,
-          points: result.points ?? null,
-          dq: result.dq ?? false,
-          dqCode: result.dqCode,
-          ns: result.ns ?? false,
-          dnf: result.dnf ?? false,
-        };
-      })
-      .filter((r): r is NonNullable<typeof r> => r != null)
-      .sort((a, b) => {
-        const ap = a.dq || a.ns || a.dnf ? 9999 : a.place ?? 9998;
-        const bp = b.dq || b.ns || b.dnf ? 9999 : b.place ?? 9998;
-        return ap - bp;
-      });
+
+  // Prelims and finals are separate rounds. For an event that has finals we emit
+  // two result blocks (Finals first, then Prelims) so both are displayed; a
+  // timed-final event emits a single block with no round label.
+  const buildRow = (entry: Entry, result: Result, prelimTime: number | null) => {
+    const athlete = s.athletes.find((a) => a.id === entry.athleteId);
+    const team = athlete?.teamId ? s.teams.find((t) => t.id === athlete.teamId) : null;
     return {
+      place: result.place ?? null,
+      athleteName: athlete ? fullName(athlete) : entry.athleteName ?? "Unknown",
+      teamAbbreviation: teamAbbrev(team),
+      age: ageAsOf(athlete?.dateOfBirth, meet),
+      seedTime: entry.seedTime ?? null,
+      prelimTime,
+      finishTime: result.finishTime ?? null,
+      points: result.points ?? null,
+      dq: result.dq ?? false,
+      dqCode: result.dqCode,
+      ns: result.ns ?? false,
+      dnf: result.dnf ?? false,
+    };
+  };
+  const sortByPlace = <T extends { place: number | null; dq: boolean; ns: boolean; dnf: boolean }>(rows: T[]) =>
+    rows.sort((a, b) => {
+      const ap = a.dq || a.ns || a.dnf ? 9999 : a.place ?? 9998;
+      const bp = b.dq || b.ns || b.dnf ? 9999 : b.place ?? 9998;
+      return ap - bp;
+    });
+
+  const events: any[] = [];
+  for (const event of meetEvents(s, meetId)) {
+    const entries = s.entries.filter((e) => e.eventId === event.id && !e.scratched);
+    const meta = {
       eventNumber: event.eventNumber,
       gender: event.gender,
       ageGroup: event.ageGroup,
       distance: event.distance,
       stroke: event.stroke,
-      results,
     };
-  });
+    const hasFinals = s.finals.some((f) => f.eventId === event.id);
+
+    if (hasFinals) {
+      const finalRows = sortByPlace(
+        entries
+          .map((entry) => {
+            const fr = resultForRound(s.results, entry.id, "final");
+            if (!fr) return null;
+            const pr = resultForRound(s.results, entry.id, "prelim");
+            return buildRow(entry, fr, pr?.finishTime ?? null);
+          })
+          .filter((r): r is NonNullable<typeof r> => r != null)
+      );
+      const prelimRows = sortByPlace(
+        entries
+          .map((entry) => {
+            const pr = resultForRound(s.results, entry.id, "prelim");
+            if (!pr) return null;
+            return buildRow(entry, pr, null);
+          })
+          .filter((r): r is NonNullable<typeof r> => r != null)
+      );
+      if (finalRows.length) events.push({ ...meta, roundLabel: "Finals", results: finalRows });
+      if (prelimRows.length) events.push({ ...meta, roundLabel: "Prelims", results: prelimRows });
+    } else {
+      const rows = sortByPlace(
+        entries
+          .map((entry) => {
+            const r = resultForRound(s.results, entry.id, "prelim");
+            if (!r) return null;
+            return buildRow(entry, r, null);
+          })
+          .filter((r): r is NonNullable<typeof r> => r != null)
+      );
+      events.push({ ...meta, results: rows });
+    }
+  }
   return { meet, events };
 }
 

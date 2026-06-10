@@ -203,19 +203,30 @@ export function generateResults(data: { meet: any; events: any[] }) {
   for (const event of data.events) {
     if (!event.results || event.results.length === 0) continue;
     if (y > 680) { doc.addPage(); y = 58; }
-    y = eventBanner(doc, `Event ${event.eventNumber} — ${fmtGender(event.gender)} ${event.ageGroup || "Open"} ${event.distance} ${event.stroke}`, y);
+    const roundSuffix = event.roundLabel ? ` — ${event.roundLabel}` : "";
+    y = eventBanner(doc, `Event ${event.eventNumber} — ${fmtGender(event.gender)} ${event.ageGroup || "Open"} ${event.distance} ${event.stroke}${roundSuffix}`, y);
 
-    const head = [["Place", "Athlete", "Team", "Age", "Seed Time", "Finish Time", "Points", "Notes"]];
-    const body = event.results.map((r: any) => [
-      r.dq ? "DQ" : r.ns ? "NS" : r.dnf ? "DNF" : r.place ?? "-",
-      r.athleteName,
-      r.teamAbbreviation ?? "-",
-      r.age ?? "-",
-      fmtTime(r.seedTime),
-      fmtTime(r.finishTime),
-      r.points != null ? r.points.toFixed(1) : "-",
-      r.dq ? (r.dqCode ?? "DQ") : r.ns ? "No Show" : r.dnf ? "Did Not Finish" : "",
-    ]);
+    // Show a Prelim column only on finals blocks where prelim times are present.
+    const showPrelim = event.results.some((r: any) => r.prelimTime != null);
+    const head = showPrelim
+      ? [["Place", "Athlete", "Team", "Age", "Seed Time", "Prelim", "Finals Time", "Points", "Notes"]]
+      : [["Place", "Athlete", "Team", "Age", "Seed Time", "Finish Time", "Points", "Notes"]];
+    const body = event.results.map((r: any) => {
+      const base = [
+        r.dq ? "DQ" : r.ns ? "NS" : r.dnf ? "DNF" : r.place ?? "-",
+        r.athleteName,
+        r.teamAbbreviation ?? "-",
+        r.age ?? "-",
+        fmtTime(r.seedTime),
+      ];
+      const tail = [
+        r.points != null ? r.points.toFixed(1) : "-",
+        r.dq ? (r.dqCode ?? "DQ") : r.ns ? "No Show" : r.dnf ? "Did Not Finish" : "",
+      ];
+      return showPrelim
+        ? [...base, fmtTime(r.prelimTime), fmtTime(r.finishTime), ...tail]
+        : [...base, fmtTime(r.finishTime), ...tail];
+    });
 
     autoTable(doc, {
       head, body,
@@ -225,7 +236,7 @@ export function generateResults(data: { meet: any; events: any[] }) {
       bodyStyles: { fontSize: 7.5, cellPadding: 2 },
       alternateRowStyles: { fillColor: POOL_STRIPE },
       margin: { top: 55, left: 14, right: 14, bottom: 22 },
-      columnStyles: { 0: { cellWidth: 36 }, 3: { cellWidth: 28 }, 4: { cellWidth: 54 }, 5: { cellWidth: 60 }, 6: { cellWidth: 42 } },
+      columnStyles: { 0: { cellWidth: 36 }, 3: { cellWidth: 28 }, 4: { cellWidth: 54 } },
       didDrawPage: () => { pageHeader(doc, title, meetName); pageFooter(doc); },
     });
 
