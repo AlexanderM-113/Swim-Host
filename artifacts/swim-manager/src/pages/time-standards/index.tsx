@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { readStore, writeStore, nextId } from "@/lib/local-store";
 import type { TimeStandard } from "@/lib/local-store";
+import { parseTimeStandardsFile } from "@/lib/time-standards-import";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -84,6 +85,27 @@ function useCreateStandard() {
   });
 }
 
+function useImportStandards() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ text, fileName }: { text: string; fileName: string }) => {
+      const result = parseTimeStandardsFile(text, fileName.replace(/\.[^.]+$/, ""));
+      if (result.standards.length === 0) return result;
+      const store = readStore() as any;
+      const existing: TimeStandard[] = store.timeStandards ?? [];
+      let id = nextId(existing);
+      const created: TimeStandard[] = result.standards.map((s) => ({
+        ...s,
+        id: id++,
+        createdAt: new Date().toISOString(),
+      }));
+      writeStore({ ...store, timeStandards: [...existing, ...created] });
+      return result;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["timeStandards"] }),
+  });
+}
+
 function useDeleteStandard() {
   const qc = useQueryClient();
   return useMutation({
@@ -100,6 +122,8 @@ export default function TimeStandardsPage() {
   const { data: standards = [], isLoading } = useTimeStandards();
   const createStd = useCreateStandard();
   const deleteStd = useDeleteStandard();
+  const importStd = useImportStandards();
+  const fileRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [filterCourse, setFilterCourse] = useState("SCY");
@@ -129,6 +153,37 @@ export default function TimeStandardsPage() {
       },
       onError: (e: any) => toast({ title: e.message ?? "Failed to add standard", variant: "destructive" }),
     });
+  }
+
+  function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = String(reader.result ?? "");
+      importStd.mutate(
+        { text, fileName: file.name },
+        {
+          onSuccess: (result) => {
+            if (result.standards.length > 0) {
+              toast({
+                title: `Imported ${result.standards.length} time standard${result.standards.length !== 1 ? "s" : ""}`,
+                description: result.skipped > 0 ? `${result.skipped} row(s) skipped.` : undefined,
+              });
+            } else {
+              toast({
+                title: "No standards imported",
+                description: result.warnings[0] ?? "Unrecognized file format.",
+                variant: "destructive",
+              });
+            }
+          },
+          onError: (err: any) => toast({ title: "Import failed", description: err?.message, variant: "destructive" }),
+        }
+      );
+    };
+    reader.readAsText(file);
+    e.target.value = "";
   }
 
   function exportCSV() {
@@ -170,6 +225,16 @@ export default function TimeStandardsPage() {
           <p className="text-muted-foreground">Manage qualifying and achievement time standards by tier.</p>
         </div>
         <div className="flex gap-2">
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".std,.txt,.csv,text/plain,text/csv"
+            className="hidden"
+            onChange={handleImportFile}
+          />
+          <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importStd.isPending}>
+            <Upload className="h-4 w-4 mr-2" /> {importStd.isPending ? "Importing…" : "Import .std / CSV"}
+          </Button>
           <Button variant="outline" onClick={exportCSV} disabled={standards.length === 0}>
             <Download className="h-4 w-4 mr-2" /> Export CSV
           </Button>
