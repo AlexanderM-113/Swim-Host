@@ -1,0 +1,12 @@
+name = "swimmanager-license"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[[kv_namespaces]]
+binding = "LICENSES"
+id = "REPLACE_WITH_YOUR_KV_ID"
+preview_id = "REPLACE_WITH_YOUR_KV_PREVIEW_ID"
+
+[vars]
+ADMIN_SECRET = "REPLACE_WITH_A_LONG_RANDOM_STRING"
+MAX_ACTIVATIONS = "3"
