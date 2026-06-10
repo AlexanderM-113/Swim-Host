@@ -319,14 +319,28 @@ export default function Scoreboard() {
                   {currentEvent.distance}m {currentEvent.stroke}
                 </span>
               </div>
-              <div className="text-xl text-slate-400 mt-0.5">
-                {currentHeatData ? `Heat ${currentHeatData.heatNumber} of ${totalHeats}` : "No heat selected"}
-                {hasResults && <Badge className="ml-2 bg-green-700 text-white text-xs">RESULTS IN</Badge>}
+              <div className="text-xl text-slate-400 mt-0.5 flex items-center justify-center gap-3">
+                <span>{currentHeatData ? `Heat ${currentHeatData.heatNumber} of ${totalHeats}` : "No heat selected"}</span>
+                {hasResults && <Badge className="bg-green-700 text-white text-xs">RESULTS IN</Badge>}
+                {racing && (
+                  <Badge className="bg-red-600 text-white animate-pulse text-xs">
+                    <Radio className="h-3 w-3 mr-1" />
+                    RACING
+                  </Badge>
+                )}
+                <RaceClock startAt={raceStartAt} running={racing} fullscreen={isFullscreen} />
               </div>
             </div>
           ) : (
-            <div className="text-center flex-1 text-slate-500 text-3xl font-bold">
-              {customTitle || currentMeet?.name || "SwimManager Pro"}
+            <div className="text-center flex-1 text-slate-500 text-3xl font-bold flex items-center justify-center gap-3">
+              <span>{customTitle || currentMeet?.name || "SwimManager Pro"}</span>
+              {racing && (
+                <Badge className="bg-red-600 text-white animate-pulse text-xs">
+                  <Radio className="h-3 w-3 mr-1" />
+                  RACING
+                </Badge>
+              )}
+              {racing && <RaceClock startAt={raceStartAt} running={racing} fullscreen={isFullscreen} />}
             </div>
           )}
 
