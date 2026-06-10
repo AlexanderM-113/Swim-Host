@@ -202,16 +202,19 @@ export default function LiveSite() {
               <Empty>No results posted yet. They'll appear here as heats finish.</Empty>
             ) : (
               <div className="space-y-4">
-                {completed.map((ev) => (
-                  <Card key={ev.eventNumber} className="bg-white/5 border-white/10 text-cyan-50">
+                {completed.map((ev, idx) => (
+                  <Card key={`${ev.eventNumber}-${(ev as any).roundLabel ?? "x"}-${idx}`} className="bg-white/5 border-white/10 text-cyan-50">
                     <CardHeader className="pb-2">
                       <CardTitle className="text-base flex items-center gap-2">
                         <Trophy className="h-4 w-4 text-amber-400" />
                         Event {ev.eventNumber} — {eventTitle(ev)}
+                        {(ev as any).roundLabel && (
+                          <Badge variant="outline" className="ml-1 border-amber-400/50 text-amber-300">{(ev as any).roundLabel}</Badge>
+                        )}
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-1">
-                      {ev.results.slice(0, 8).map((r, i) => (
+                      {ev.results.slice(0, 8).map((r: any, i: number) => (
                         <div key={i} className="flex items-center gap-3 text-sm py-1 border-b border-white/5 last:border-0">
                           <span className={`w-6 text-center font-bold ${i === 0 ? "text-amber-400" : i === 1 ? "text-slate-300" : i === 2 ? "text-orange-400" : "text-cyan-200/60"}`}>
                             {r.dq ? "DQ" : r.ns ? "NS" : r.dnf ? "DNF" : r.place ?? "—"}

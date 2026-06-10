@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useListEvents, useListHeats, useSetResult, getListHeatsQueryKey, readStore } from "@/lib/local-store";
+import { useListFinals } from "@/lib/finals";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -74,6 +75,9 @@ export default function MeetRun({ meetId }: { meetId: number }) {
     selectedEvent ? parseInt(selectedEvent, 10) : 0,
     { query: { enabled: !!selectedEvent, queryKey: getListHeatsQueryKey(parseInt(selectedEvent || "0", 10)) } }
   );
+
+  const { data: finals } = useListFinals(meetId);
+  const isFinalsRound = !!selectedEvent && (finals ?? []).some((f) => f.eventId === parseInt(selectedEvent, 10));
 
   const setResult = useSetResult();
   const { toast } = useToast();
@@ -219,7 +223,14 @@ export default function MeetRun({ meetId }: { meetId: number }) {
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex-1">
-                <CardTitle>Live Meet Running</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  Live Meet Running
+                  {selectedEvent && (finals ?? []).length > 0 && (
+                    <Badge variant={isFinalsRound ? "default" : "secondary"} className={isFinalsRound ? "bg-amber-500 text-black" : ""}>
+                      {isFinalsRound ? "Finals Round" : "Prelims Round"}
+                    </Badge>
+                  )}
+                </CardTitle>
                 {selectedEvent && totalEntries > 0 && (
                   <div className="mt-2 space-y-1">
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
