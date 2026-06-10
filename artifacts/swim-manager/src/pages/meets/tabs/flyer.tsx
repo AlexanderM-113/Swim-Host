@@ -371,7 +371,7 @@ function FlyerPreview({
               const isPaired = girlsEvents.length > 0 && boysEvents.length > 0;
 
               return (
-                <div key={session.id} className="mb-6">
+                <div key={session.id} className="mb-6 flyer-section">
                   <div className="text-center mb-2">
                     <p className="font-bold text-xs uppercase">
                       Session {session.sessionNumber}: {session.name}
@@ -847,13 +847,28 @@ export default function MeetFlyer({ meetId }: { meetId: number }) {
         </TabsContent>
       </Tabs>
 
-      {/* Print styles injected globally */}
+      {/* Print styles injected globally.
+          NB: we hide everything with `visibility:hidden` (NOT `display:none`)
+          and re-show only the flyer subtree. Using display:none on the
+          ancestors would hide the nested .flyer-preview too (a child can't
+          render when an ancestor is display:none), which printed a blank page. */}
       <style>{`
         @media print {
-          body > * { display: none !important; }
-          .flyer-preview { display: block !important; }
-          #root > * { display: none !important; }
-          .flyer-preview * { color-adjust: exact; -webkit-print-color-adjust: exact; }
+          @page { size: letter portrait; margin: 0.5in; }
+          html, body { background: #fff !important; }
+          body * { visibility: hidden !important; }
+          .flyer-preview, .flyer-preview * { visibility: visible !important; }
+          .flyer-preview {
+            position: absolute !important;
+            left: 0; top: 0;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            box-shadow: none !important;
+          }
+          .flyer-preview * { color-adjust: exact; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .flyer-section { break-inside: avoid; page-break-inside: avoid; }
         }
       `}</style>
     </div>
