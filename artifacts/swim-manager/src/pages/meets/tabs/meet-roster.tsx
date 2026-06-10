@@ -1,126 +1,152 @@
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useMemo } from "react";
+import {
+  useListMeetRosterAthletes,
+  useAddMeetRosterAthlete,
+  useImportAthletesFromTeamManager,
+  useDeleteMeetRosterAthlete,
+  useListAthletes,
+  useListTeams,
+  useCreateTeam,
+  readStore,
+  type Athlete,
+} from "@/lib/local-store";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Building2, Plus, Trash2, UserPlus } from "lucide-react";
-import { formatTime } from "@/lib/format-time";
-
-const ROSTER_KEY = (meetId: number) => `swimmanager_meet_roster_${meetId}`;
-const TEAMS_KEY = (meetId: number) => `swimmanager_meet_teams_${meetId}`;
-
-interface MeetAthlete {
-  id: number;
-  firstName: string;
-  lastName: string;
-  gender: string;
-  teamCode: string;
-  seedTime?: number;
-  seedCourse?: string;
-  event?: string;
-}
-
-interface MeetTeam {
-  id: number;
-  code: string;
-  name: string;
-  lsc?: string;
-}
-
-function readRoster(meetId: number): MeetAthlete[] {
-  try {
-    const raw = localStorage.getItem(ROSTER_KEY(meetId));
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-
-function writeRoster(meetId: number, data: MeetAthlete[]) {
-  localStorage.setItem(ROSTER_KEY(meetId), JSON.stringify(data));
-}
-
-function readTeams(meetId: number): MeetTeam[] {
-  try {
-    const raw = localStorage.getItem(TEAMS_KEY(meetId));
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-
-function writeTeams(meetId: number, data: MeetTeam[]) {
-  localStorage.setItem(TEAMS_KEY(meetId), JSON.stringify(data));
-}
+import { Link } from "wouter";
+import { Users, Building2, Plus, Trash2, UserPlus, Download, FileUp, Search } from "lucide-react";
 
 export default function MeetRoster({ meetId }: { meetId: number }) {
   const { toast } = useToast();
-  const [athletes, setAthletes] = useState<MeetAthlete[]>(() => readRoster(meetId));
-  const [teams, setTeams] = useState<MeetTeam[]>(() => readTeams(meetId));
+  const { data: rosterAthletes = [] } = useListMeetRosterAthletes(meetId);
+  const { data: clubAthletes = [] } = useListAthletes();
+  const { data: teams = [] } = useListTeams();
+  const addAthlete = useAddMeetRosterAthlete();
+  const importFromTM = useImportAthletesFromTeamManager();
+  const deleteAthlete = useDeleteMeetRosterAthlete();
+  const createTeam = useCreateTeam();
 
   const [addAthleteOpen, setAddAthleteOpen] = useState(false);
   const [addTeamOpen, setAddTeamOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importSearch, setImportSearch] = useState("");
+  const [importSelected, setImportSelected] = useState<Set<number>>(new Set());
 
-  const [newAthlete, setNewAthlete] = useState({
-    firstName: "", lastName: "", gender: "M",
-    teamCode: "", seedTime: "", seedCourse: "SCY", event: "",
-  });
+  const [newAthlete, setNewAthlete] = useState({ firstName: "", lastName: "", gender: "M", teamCode: "", dob: "" });
   const [newTeam, setNewTeam] = useState({ code: "", name: "", lsc: "" });
 
-  function saveAthlete() {
+  // Count entries per roster athlete so the table reflects actual meet entries.
+  const entryCountByAthlete = useMemo(() => {
+    const store = readStore();
+    const counts = new Map<number, number>();
+    for (const e of store.entries) {
+      if (e.meetId === meetId && !e.scratched) counts.set(e.athleteId, (counts.get(e.athleteId) ?? 0) + 1);
+    }
+    return counts;
+  }, [meetId, rosterAthletes]);
+
+  // Teams that actually appear in this meet's roster.
+  const rosterTeams = useMemo(() => {
+    const ids = new Set(rosterAthletes.map((a) => a.teamId).filter((x): x is number => x != null));
+    return teams.filter((t) => ids.has(t.id));
+  }, [rosterAthletes, teams]);
+
+  function findOrCreateTeamId(code: string): Promise<number | undefined> | number | undefined {
+    const clean = code.trim();
+    if (!clean) return undefined;
+    const existing = teams.find(
+      (t) => t.abbreviation?.toUpperCase() === clean.toUpperCase() || t.name.toUpperCase() === clean.toUpperCase()
+    );
+    if (existing) return existing.id;
+    return createTeam
+      .mutateAsync({ data: { name: clean, abbreviation: clean.toUpperCase().slice(0, 6) } })
+      .then((t) => t.id);
+  }
+
+  async function saveAthlete() {
     if (!newAthlete.firstName.trim() || !newAthlete.lastName.trim()) {
-      toast({ title: "Name required", description: "Please enter first and last name.", variant: "destructive" });
+      toast({ title: "Name required", description: "Enter first and last name.", variant: "destructive" });
       return;
     }
-    const athlete: MeetAthlete = {
-      id: Date.now(),
-      firstName: newAthlete.firstName.trim(),
-      lastName: newAthlete.lastName.trim(),
-      gender: newAthlete.gender,
-      teamCode: newAthlete.teamCode.trim() || "UNAT",
-      seedTime: newAthlete.seedTime ? parseTimeInput(newAthlete.seedTime) : undefined,
-      seedCourse: newAthlete.seedCourse || "SCY",
-      event: newAthlete.event.trim() || undefined,
-    };
-    const updated = [...athletes, athlete];
-    setAthletes(updated);
-    writeRoster(meetId, updated);
-    setNewAthlete({ firstName: "", lastName: "", gender: "M", teamCode: "", seedTime: "", seedCourse: "SCY", event: "" });
+    const teamId = await findOrCreateTeamId(newAthlete.teamCode);
+    await addAthlete.mutateAsync({
+      meetId,
+      data: {
+        firstName: newAthlete.firstName.trim(),
+        lastName: newAthlete.lastName.trim(),
+        gender: newAthlete.gender,
+        teamId,
+        dateOfBirth: newAthlete.dob || undefined,
+        active: true,
+      },
+    });
+    setNewAthlete({ firstName: "", lastName: "", gender: "M", teamCode: "", dob: "" });
     setAddAthleteOpen(false);
     toast({ title: "Athlete added to meet roster" });
   }
 
-  function saveTeam() {
+  async function saveTeam() {
     if (!newTeam.code.trim() || !newTeam.name.trim()) {
       toast({ title: "Code and name required", variant: "destructive" });
       return;
     }
-    const team: MeetTeam = {
-      id: Date.now(),
-      code: newTeam.code.trim().toUpperCase().substring(0, 6),
-      name: newTeam.name.trim(),
-      lsc: newTeam.lsc.trim() || undefined,
-    };
-    const updated = [...teams, team];
-    setTeams(updated);
-    writeTeams(meetId, updated);
+    await createTeam.mutateAsync({
+      data: {
+        name: newTeam.name.trim(),
+        abbreviation: newTeam.code.trim().toUpperCase().substring(0, 6),
+        lsc: newTeam.lsc.trim() || undefined,
+      },
+    });
     setNewTeam({ code: "", name: "", lsc: "" });
     setAddTeamOpen(false);
-    toast({ title: "Team added to meet" });
+    toast({ title: "Team added" });
   }
 
-  function removeAthlete(id: number) {
-    const updated = athletes.filter(a => a.id !== id);
-    setAthletes(updated);
-    writeRoster(meetId, updated);
+  function toggleImport(id: number) {
+    setImportSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   }
 
-  function removeTeam(id: number) {
-    const updated = teams.filter(t => t.id !== id);
-    setTeams(updated);
-    writeTeams(meetId, updated);
+  const filteredClub = useMemo(() => {
+    const q = importSearch.trim().toLowerCase();
+    if (!q) return clubAthletes;
+    return clubAthletes.filter((a) =>
+      `${a.firstName} ${a.lastName} ${a.teamName ?? ""}`.toLowerCase().includes(q)
+    );
+  }, [clubAthletes, importSearch]);
+
+  async function runImport() {
+    if (importSelected.size === 0) {
+      toast({ title: "Select at least one athlete", variant: "destructive" });
+      return;
+    }
+    const res = await importFromTM.mutateAsync({ meetId, athleteIds: [...importSelected] });
+    setImportOpen(false);
+    setImportSelected(new Set());
+    setImportSearch("");
+    toast({
+      title: "Imported from Team Manager",
+      description: `${res?.imported ?? 0} athlete(s) added to the meet roster.`,
+    });
+  }
+
+  function removeAthlete(a: Athlete) {
+    if (!confirm(`Remove ${a.firstName} ${a.lastName} from the meet roster? Their entries in this meet will also be removed.`)) return;
+    deleteAthlete.mutate(
+      { meetId, athleteId: a.id },
+      { onSuccess: () => toast({ title: "Removed from roster" }) }
+    );
   }
 
   return (
@@ -131,8 +157,10 @@ export default function MeetRoster({ meetId }: { meetId: number }) {
           Meet Roster
         </h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Athletes and teams scoped to this meet only — separate from the global Team Manager.
-          Use this for quick on-site entry management.
+          The roster is the entry pool for this hosted meet — kept separate from the global Team Manager.
+          Add athletes directly, import an <Link href="/sdif" className="text-cyan-500 underline">.sd3 file</Link>,
+          or pull selected athletes in from Team Manager. Entries (with seed times) are made on the
+          <span className="font-medium"> Athletes &amp; Entries</span> tab.
         </p>
       </div>
 
@@ -140,19 +168,29 @@ export default function MeetRoster({ meetId }: { meetId: number }) {
         <TabsList>
           <TabsTrigger value="athletes">
             <Users className="h-3.5 w-3.5 mr-1.5" />
-            Athletes ({athletes.length})
+            Athletes ({rosterAthletes.length})
           </TabsTrigger>
           <TabsTrigger value="teams">
             <Building2 className="h-3.5 w-3.5 mr-1.5" />
-            Teams ({teams.length})
+            Teams ({rosterTeams.length})
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="athletes" className="mt-4 space-y-4">
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+              <Download className="h-4 w-4 mr-2" />
+              Import from Team Manager
+            </Button>
+            <Link href="/sdif">
+              <Button variant="outline" size="sm">
+                <FileUp className="h-4 w-4 mr-2" />
+                Import .sd3
+              </Button>
+            </Link>
             <Button onClick={() => setAddAthleteOpen(true)} size="sm">
               <UserPlus className="h-4 w-4 mr-2" />
-              Quick-Add Athlete
+              Add Athlete
             </Button>
           </div>
           <Card>
@@ -163,27 +201,25 @@ export default function MeetRoster({ meetId }: { meetId: number }) {
                     <TableHead className="pl-6">Name</TableHead>
                     <TableHead>Team</TableHead>
                     <TableHead>Gender</TableHead>
-                    <TableHead>Event</TableHead>
-                    <TableHead className="font-mono">Seed Time</TableHead>
+                    <TableHead>Birth Date</TableHead>
+                    <TableHead className="text-center">Entries</TableHead>
                     <TableHead className="text-right pr-6">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {athletes.map(a => (
+                  {rosterAthletes.map((a) => (
                     <TableRow key={a.id}>
                       <TableCell className="pl-6 font-medium">{a.lastName}, {a.firstName}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="font-mono">{a.teamCode}</Badge>
+                        <Badge variant="outline" className="font-mono">{a.teamName ?? "UNAT"}</Badge>
                       </TableCell>
                       <TableCell>{a.gender}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{a.event || "—"}</TableCell>
-                      <TableCell className="font-mono text-sm">
-                        {a.seedTime ? `${formatTime(a.seedTime)} ${a.seedCourse}` : "NT"}
-                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{a.dateOfBirth || "—"}</TableCell>
+                      <TableCell className="text-center">{entryCountByAthlete.get(a.id) ?? 0}</TableCell>
                       <TableCell className="text-right pr-6">
                         <Button
                           size="sm" variant="ghost"
-                          onClick={() => removeAthlete(a.id)}
+                          onClick={() => removeAthlete(a)}
                           className="text-destructive hover:text-destructive h-7 w-7 p-0"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -191,10 +227,10 @@ export default function MeetRoster({ meetId }: { meetId: number }) {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {athletes.length === 0 && (
+                  {rosterAthletes.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                        No athletes added yet. Use Quick-Add to add athletes to this meet.
+                        No athletes in the roster yet. Add one, import a .sd3 file, or import from Team Manager.
                       </TableCell>
                     </TableRow>
                   )}
@@ -219,30 +255,24 @@ export default function MeetRoster({ meetId }: { meetId: number }) {
                     <TableHead className="pl-6">Code</TableHead>
                     <TableHead>Team Name</TableHead>
                     <TableHead>LSC</TableHead>
-                    <TableHead className="text-right pr-6">Actions</TableHead>
+                    <TableHead className="text-center">Athletes</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {teams.map(t => (
+                  {rosterTeams.map((t) => (
                     <TableRow key={t.id}>
-                      <TableCell className="pl-6 font-mono font-bold">{t.code}</TableCell>
+                      <TableCell className="pl-6 font-mono font-bold">{t.abbreviation ?? "—"}</TableCell>
                       <TableCell className="font-medium">{t.name}</TableCell>
                       <TableCell className="text-muted-foreground">{t.lsc || "—"}</TableCell>
-                      <TableCell className="text-right pr-6">
-                        <Button
-                          size="sm" variant="ghost"
-                          onClick={() => removeTeam(t.id)}
-                          className="text-destructive hover:text-destructive h-7 w-7 p-0"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                      <TableCell className="text-center">
+                        {rosterAthletes.filter((a) => a.teamId === t.id).length}
                       </TableCell>
                     </TableRow>
                   ))}
-                  {teams.length === 0 && (
+                  {rosterTeams.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                        No teams added yet.
+                        No teams represented in the roster yet.
                       </TableCell>
                     </TableRow>
                   )}
@@ -255,123 +285,122 @@ export default function MeetRoster({ meetId }: { meetId: number }) {
 
       {/* Add Athlete Dialog */}
       <Dialog open={addAthleteOpen} onOpenChange={setAddAthleteOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Quick-Add Athlete</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
+        <DialogContent>
+          <DialogHeader><DialogTitle>Add Athlete to Meet Roster</DialogTitle></DialogHeader>
+          <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>First Name *</Label>
-                <Input value={newAthlete.firstName} onChange={e => setNewAthlete(p => ({ ...p, firstName: e.target.value }))} placeholder="Jane" />
+                <Label>First Name</Label>
+                <Input value={newAthlete.firstName} onChange={(e) => setNewAthlete({ ...newAthlete, firstName: e.target.value })} />
               </div>
               <div className="space-y-1.5">
-                <Label>Last Name *</Label>
-                <Input value={newAthlete.lastName} onChange={e => setNewAthlete(p => ({ ...p, lastName: e.target.value }))} placeholder="Doe" />
+                <Label>Last Name</Label>
+                <Input value={newAthlete.lastName} onChange={(e) => setNewAthlete({ ...newAthlete, lastName: e.target.value })} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Gender</Label>
-                <Select value={newAthlete.gender} onValueChange={v => setNewAthlete(p => ({ ...p, gender: v }))}>
+                <Select value={newAthlete.gender} onValueChange={(v) => setNewAthlete({ ...newAthlete, gender: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="M">Male</SelectItem>
-                    <SelectItem value="F">Female</SelectItem>
+                    <SelectItem value="M">M</SelectItem>
+                    <SelectItem value="F">F</SelectItem>
                     <SelectItem value="X">Mixed</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
                 <Label>Team Code</Label>
-                <Input
-                  value={newAthlete.teamCode}
-                  onChange={e => setNewAthlete(p => ({ ...p, teamCode: e.target.value.toUpperCase() }))}
-                  placeholder="UNAT"
-                  maxLength={6}
-                />
+                <Input value={newAthlete.teamCode} onChange={(e) => setNewAthlete({ ...newAthlete, teamCode: e.target.value })} placeholder="UNAT" />
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Event (optional)</Label>
-              <Input value={newAthlete.event} onChange={e => setNewAthlete(p => ({ ...p, event: e.target.value }))} placeholder="e.g. 200 Freestyle" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Seed Time (optional)</Label>
-                <Input
-                  value={newAthlete.seedTime}
-                  onChange={e => setNewAthlete(p => ({ ...p, seedTime: e.target.value }))}
-                  placeholder="1:52.34"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Course</Label>
-                <Select value={newAthlete.seedCourse} onValueChange={v => setNewAthlete(p => ({ ...p, seedCourse: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="SCY">SCY</SelectItem>
-                    <SelectItem value="SCM">SCM</SelectItem>
-                    <SelectItem value="LCM">LCM</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <Label>Birth Date (optional)</Label>
+              <Input type="date" value={newAthlete.dob} onChange={(e) => setNewAthlete({ ...newAthlete, dob: e.target.value })} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddAthleteOpen(false)}>Cancel</Button>
-            <Button onClick={saveAthlete}>Add to Roster</Button>
+            <Button onClick={saveAthlete} disabled={addAthlete.isPending}>Add Athlete</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Add Team Dialog */}
       <Dialog open={addTeamOpen} onOpenChange={setAddTeamOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Add Team to Meet</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
+        <DialogContent>
+          <DialogHeader><DialogTitle>Add Team</DialogTitle></DialogHeader>
+          <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label>Team Code * (up to 6 chars)</Label>
-              <Input
-                value={newTeam.code}
-                onChange={e => setNewTeam(p => ({ ...p, code: e.target.value.toUpperCase() }))}
-                placeholder="BEST"
-                maxLength={6}
-              />
+              <Label>Team Code</Label>
+              <Input value={newTeam.code} onChange={(e) => setNewTeam({ ...newTeam, code: e.target.value })} placeholder="LAC" />
             </div>
             <div className="space-y-1.5">
-              <Label>Team Name *</Label>
-              <Input value={newTeam.name} onChange={e => setNewTeam(p => ({ ...p, name: e.target.value }))} placeholder="Best Swim Club" />
+              <Label>Team Name</Label>
+              <Input value={newTeam.name} onChange={(e) => setNewTeam({ ...newTeam, name: e.target.value })} placeholder="Lincoln Aquatic Club" />
             </div>
             <div className="space-y-1.5">
               <Label>LSC (optional)</Label>
-              <Input value={newTeam.lsc} onChange={e => setNewTeam(p => ({ ...p, lsc: e.target.value }))} placeholder="e.g. FL" maxLength={4} />
+              <Input value={newTeam.lsc} onChange={(e) => setNewTeam({ ...newTeam, lsc: e.target.value })} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddTeamOpen(false)}>Cancel</Button>
-            <Button onClick={saveTeam}>Add Team</Button>
+            <Button onClick={saveTeam} disabled={createTeam.isPending}>Add Team</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import from Team Manager Dialog */}
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Import Athletes from Team Manager</DialogTitle>
+            <DialogDescription>
+              Copy selected club athletes into this meet's roster. Originals stay in Team Manager.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input className="pl-8" placeholder="Search athletes…" value={importSearch} onChange={(e) => setImportSearch(e.target.value)} />
+          </div>
+          <div className="max-h-80 overflow-y-auto border rounded-md">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10" />
+                  <TableHead>Name</TableHead>
+                  <TableHead>Team</TableHead>
+                  <TableHead>Gender</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredClub.map((a) => (
+                  <TableRow key={a.id} className="cursor-pointer" onClick={() => toggleImport(a.id)}>
+                    <TableCell><Checkbox checked={importSelected.has(a.id)} onCheckedChange={() => toggleImport(a.id)} /></TableCell>
+                    <TableCell className="font-medium">{a.lastName}, {a.firstName}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{a.teamName ?? "—"}</TableCell>
+                    <TableCell>{a.gender}</TableCell>
+                  </TableRow>
+                ))}
+                {filteredClub.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                      {clubAthletes.length === 0 ? "No Team Manager athletes yet." : "No matches."}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          <DialogFooter>
+            <span className="text-sm text-muted-foreground mr-auto self-center">{importSelected.size} selected</span>
+            <Button variant="outline" onClick={() => setImportOpen(false)}>Cancel</Button>
+            <Button onClick={runImport} disabled={importFromTM.isPending}>Import Selected</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
   );
-}
-
-function parseTimeInput(s: string): number | undefined {
-  if (!s.trim()) return undefined;
-  const clean = s.trim().replace(":", "");
-  const dotIdx = clean.lastIndexOf(".");
-  if (dotIdx === -1) {
-    const n = parseFloat(clean);
-    return isNaN(n) ? undefined : n;
-  }
-  const whole = clean.substring(0, dotIdx);
-  const frac = clean.substring(dotIdx + 1);
-  const hundredths = parseInt(frac.padEnd(2, "0").substring(0, 2)) / 100;
-  const wholeNum = parseInt(whole) || 0;
-  if (wholeNum >= 100) {
-    const mins = Math.floor(wholeNum / 100);
-    const secs = wholeNum % 100;
-    return mins * 60 + secs + hundredths;
-  }
-  return wholeNum + hundredths;
 }
