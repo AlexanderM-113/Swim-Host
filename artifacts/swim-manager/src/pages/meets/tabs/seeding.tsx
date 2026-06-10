@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { useListEvents, useSeedEvent, getListEventsQueryKey } from "@/lib/local-store";
+import { useState, useEffect } from "react";
+import { useListEvents, useSeedEvent, useGetMeet, getListEventsQueryKey, getGetMeetQueryKey } from "@/lib/local-store";
+import { getMeetSettings } from "@/lib/meet-settings";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -18,6 +19,7 @@ export default function MeetSeeding({ meetId }: { meetId: number }) {
     query: { enabled: !!meetId, queryKey: getListEventsQueryKey(meetId) },
   });
   const seedEvent = useSeedEvent();
+  const { data: meet } = useGetMeet(meetId, { query: { enabled: !!meetId, queryKey: getGetMeetQueryKey(meetId) } });
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -27,6 +29,17 @@ export default function MeetSeeding({ meetId }: { meetId: number }) {
   const [lanes, setLanes] = useState("8");
   const [heatOrder, setHeatOrder] = useState("slow_to_fast");
   const [circleSeeding, setCircleSeeding] = useState(true);
+  const [laneAssignment, setLaneAssignment] = useState<"center" | "dual">("center");
+
+  // Pull defaults from the meet's seeding/scoring settings (set on the Settings tab).
+  useEffect(() => {
+    if (!meet) return;
+    const s = getMeetSettings(meet);
+    setLanes(String(s.lanes));
+    setHeatOrder(s.heatOrder);
+    setCircleSeeding(s.circleSeeding);
+    setLaneAssignment(s.laneAssignment);
+  }, [meet?.id]);
 
   function openSeedDialog(eventId: number, name: string) {
     setPendingEventId(eventId);
@@ -37,7 +50,7 @@ export default function MeetSeeding({ meetId }: { meetId: number }) {
   function handleSeed() {
     if (!pendingEventId) return;
     seedEvent.mutate(
-      { eventId: pendingEventId, data: { lanes: parseInt(lanes), order: heatOrder, circleSeeding } },
+      { eventId: pendingEventId, data: { lanes: parseInt(lanes), order: heatOrder, circleSeeding, laneAssignment } },
       {
         onSuccess: () => {
           toast({ title: "Event seeded successfully" });
@@ -69,7 +82,7 @@ export default function MeetSeeding({ meetId }: { meetId: number }) {
         return;
       }
       seedEvent.mutate(
-        { eventId: evt.id, data: { lanes: parseInt(lanes), order: heatOrder, circleSeeding } },
+        { eventId: evt.id, data: { lanes: parseInt(lanes), order: heatOrder, circleSeeding, laneAssignment } },
         { onSuccess: seedNext, onError: () => seedNext() }
       );
     }
@@ -191,6 +204,16 @@ export default function MeetSeeding({ meetId }: { meetId: number }) {
                 <SelectContent>
                   <SelectItem value="slow_to_fast">Slow to Fast (Championship)</SelectItem>
                   <SelectItem value="fast_to_slow">Fast to Slow</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Lane Assignment</Label>
+              <Select value={laneAssignment} onValueChange={(v) => setLaneAssignment(v as "center" | "dual")}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="center">Center-out (standard)</SelectItem>
+                  <SelectItem value="dual">Dual — teams alternate lanes</SelectItem>
                 </SelectContent>
               </Select>
             </div>

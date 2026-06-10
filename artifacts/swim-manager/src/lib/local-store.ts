@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getMeetSettings, pointsForPlace as pointsForPlaceSettings } from "./meet-settings";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -893,7 +894,7 @@ export function useSeedEvent() {
       data,
     }: {
       eventId: number;
-      data: { lanes?: number; order?: string; circleSeeding?: boolean };
+      data: { lanes?: number; order?: string; circleSeeding?: boolean; laneAssignment?: "center" | "dual" };
     }) => {
       const store = readStore();
       const event = store.events.find((e) => e.id === eventId);
@@ -902,6 +903,7 @@ export function useSeedEvent() {
       const numLanes = data.lanes ?? (event as any).lanes ?? 8;
       const slowToFast = (data.order ?? "slow_to_fast") === "slow_to_fast";
       const useCircle = data.circleSeeding !== false;
+      const dualAssignment = data.laneAssignment === "dual";
 
       const eventEntries = store.entries.filter(
         (e) => e.eventId === eventId && !e.scratched
@@ -915,6 +917,32 @@ export function useSeedEvent() {
 
       const numHeats = Math.ceil(sorted.length / numLanes);
       const laneOrder = useCircle ? circleSeeding(numLanes) : Array.from({ length: numLanes }, (_, i) => i + 1);
+
+      // Dual-meet lane assignment: teams alternate lanes (team A in odd lanes,
+      // team B in even lanes), seeded center-out within each team's lane set.
+      const dualLaneFor = (heatEntries: Entry[]): Map<number, number> => {
+        const map = new Map<number, number>();
+        const teamOrder: number[] = [];
+        const byTeam = new Map<number, Entry[]>();
+        for (const e of heatEntries) {
+          const tid = e.athleteId ? (store.athletes.find((a) => a.id === e.athleteId)?.teamId ?? -1) : -1;
+          if (!byTeam.has(tid)) { byTeam.set(tid, []); teamOrder.push(tid); }
+          byTeam.get(tid)!.push(e);
+        }
+        // Build per-team lane pools by parity of lane number.
+        const allLanes = Array.from({ length: numLanes }, (_, i) => i + 1);
+        const pools = teamOrder.map((_, ti) => allLanes.filter((ln) => (ln - 1) % teamOrder.length === ti % teamOrder.length));
+        teamOrder.forEach((tid, ti) => {
+          const swimmers = byTeam.get(tid)!;
+          const pool = pools[ti].length ? pools[ti] : allLanes;
+          const centerOrder = circleSeeding(pool.length).map((idx) => pool[idx - 1]);
+          swimmers.forEach((e, i) => {
+            const lane = centerOrder[i] ?? pool[i] ?? allLanes[i];
+            if (lane != null) map.set(e.id, lane);
+          });
+        });
+        return map;
+      };
       const newHeats: Heat[] = [];
       const updatedEntries = [...store.entries];
 
@@ -934,8 +962,10 @@ export function useSeedEvent() {
           dnf: false,
         }));
 
+        const dualMap = dualAssignment ? dualLaneFor(heatEntries) : null;
         heatEntries.forEach((entry, idx) => {
-          const lane = laneOrder[idx] - 1;
+          const laneNumber = dualMap?.get(entry.id) ?? laneOrder[idx];
+          const lane = laneNumber - 1;
           lanes[lane] = {
             ...lanes[lane],
             entryId: entry.id,
@@ -949,7 +979,7 @@ export function useSeedEvent() {
             updatedEntries[ei] = {
               ...updatedEntries[ei],
               heat: h + 1,
-              lane: laneOrder[idx],
+              lane: laneNumber,
             };
           }
         });
@@ -1126,21 +1156,53 @@ export function useGetMeetTeamScores(meetId?: number, options?: object) {
     queryFn: () => {
       if (!meetId) return [];
       const store = readStore();
+      const meet = store.meets.find((m) => m.id === meetId);
+      const settings = meet ? getMeetSettings(meet) : null;
       const scoreMap = new Map<number, { teamId: number; teamName: string; score: number }>();
-      const meetEvents = store.events.filter((e) => e.meetId === meetId).map((e) => e.id);
+      const eventById = new Map(store.events.filter((e) => e.meetId === meetId).map((e) => [e.id, e] as const));
+
+      // Collect eligible results with the context needed to apply scoring rules.
+      type Scored = { eventId: number; teamId: number; teamName: string; place: number; isRelay: boolean; override?: number };
+      const scored: Scored[] = [];
       store.results.forEach((result) => {
-        if (!meetEvents.includes(result.eventId) || result.dq || result.ns || result.dnf) return;
+        const event = eventById.get(result.eventId);
+        if (!event || result.dq || result.ns || result.dnf) return;
         const entry = store.entries.find((e) => e.id === result.entryId);
         if (!entry) return;
         const athlete = store.athletes.find((a) => a.id === entry.athleteId);
         if (!athlete?.teamId) return;
         const team = store.teams.find((t) => t.id === athlete.teamId);
         if (!team) return;
-        const points = result.points ?? pointsForPlace(result.place);
-        const existing = scoreMap.get(athlete.teamId);
-        if (existing) existing.score += points;
-        else scoreMap.set(athlete.teamId, { teamId: athlete.teamId, teamName: team.name, score: points });
+        scored.push({
+          eventId: result.eventId,
+          teamId: athlete.teamId,
+          teamName: team.name,
+          place: result.place ?? 0,
+          isRelay: !!event.isRelay,
+          override: result.points,
+        });
       });
+
+      // Apply max-scorers-per-team cap (per event) for individual events.
+      const maxPerTeam = settings?.maxScorersPerTeam ?? 0;
+      const perEventTeamCount = new Map<string, number>();
+      // Process in place order so the top finishers from each team score first.
+      scored.sort((a, b) => a.place - b.place);
+      for (const s of scored) {
+        if (maxPerTeam > 0 && !s.isRelay) {
+          const key = `${s.eventId}:${s.teamId}`;
+          const used = perEventTeamCount.get(key) ?? 0;
+          if (used >= maxPerTeam) continue;
+          perEventTeamCount.set(key, used + 1);
+        }
+        const points = s.override ?? (settings
+          ? pointsForPlaceSettings(s.place, s.isRelay, settings)
+          : pointsForPlace(s.place));
+        if (points <= 0) continue;
+        const existing = scoreMap.get(s.teamId);
+        if (existing) existing.score += points;
+        else scoreMap.set(s.teamId, { teamId: s.teamId, teamName: s.teamName, score: points });
+      }
       return Array.from(scoreMap.values()).sort((a, b) => b.score - a.score);
     },
     staleTime: 0,
