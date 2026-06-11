@@ -17,7 +17,8 @@ import { getActiveRun, subscribeToSignals, subscribeToRun } from "@/lib/live-bro
 import { addScratchRequest } from "@/lib/scratch-requests";
 import { format } from "date-fns";
 import {
-  Waves, Radio, Clock, Trophy, CalendarDays, MapPin, CheckCircle2, Timer, AlertTriangle,
+  Waves, Radio, Clock, Trophy, CalendarDays, MapPin, CheckCircle2,
+  Timer, AlertTriangle, Layers,
 } from "lucide-react";
 
 const DEADLINE_KEY = (meetId: number) => `swimmanager_finals_deadline_${meetId}`;
@@ -45,6 +46,79 @@ const STATUS_STYLE: Record<string, string> = {
   open: "bg-white/10 text-cyan-100/70 border-white/15",
 };
 
+// ─── Heat Sheet builder ────────────────────────────────────────────────────────
+
+interface HeatLane {
+  lane: number;
+  athleteName: string;
+  teamAbbr: string;
+  age: string;
+  seedTime: number | null;
+}
+
+interface HeatRow {
+  heatNumber: number;
+  lanes: HeatLane[];
+}
+
+interface HeatEvent {
+  eventId: number;
+  eventNumber: number;
+  title: string;
+  heats: HeatRow[];
+}
+
+function calcAge(dob?: string | null, meetDate?: string | null): string {
+  if (!dob) return "—";
+  const ref = meetDate ? new Date(meetDate) : new Date();
+  const birth = new Date(dob);
+  let age = ref.getFullYear() - birth.getFullYear();
+  const m = ref.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && ref.getDate() < birth.getDate())) age--;
+  return String(age);
+}
+
+function buildHeatSheetData(meetId: number): HeatEvent[] {
+  const store = readStore();
+  const meet = store.meets.find((m) => m.id === meetId);
+  const events = store.events
+    .filter((e) => e.meetId === meetId && (e.status === "seeded" || e.status === "completed"))
+    .sort((a, b) => a.eventNumber - b.eventNumber);
+
+  return events.map((event) => {
+    const heats = store.heats
+      .filter((h) => h.eventId === event.id)
+      .sort((a, b) => a.heatNumber - b.heatNumber)
+      .map((heat) => ({
+        heatNumber: heat.heatNumber,
+        lanes: (heat.lanes ?? [])
+          .sort((a: any, b: any) => a.laneNumber - b.laneNumber)
+          .map((lane: any) => {
+            const entry = lane.entryId ? store.entries.find((e) => e.id === lane.entryId) : null;
+            const athlete = entry ? store.athletes.find((a) => a.id === entry.athleteId) : null;
+            const team = athlete?.teamId ? store.teams.find((t) => t.id === athlete.teamId) : null;
+            return {
+              lane: lane.laneNumber,
+              athleteName: athlete
+                ? `${athlete.firstName} ${athlete.lastName}`
+                : entry?.athleteName ?? "—",
+              teamAbbr: team?.abbreviation ?? (athlete ? "UNAT" : "—"),
+              age: calcAge(athlete?.dateOfBirth, meet?.startDate),
+              seedTime: entry?.seedTime ?? null,
+            };
+          }),
+      }));
+    return {
+      eventId: event.id,
+      eventNumber: event.eventNumber,
+      title: eventTitle(event),
+      heats,
+    };
+  });
+}
+
+// ─── Main page ─────────────────────────────────────────────────────────────────
+
 export default function LiveSite() {
   const [, params] = useRoute("/live/:meetId");
   const meetId = params?.meetId ? parseInt(params.meetId) : 0;
@@ -52,7 +126,6 @@ export default function LiveSite() {
   const [tick, setTick] = useState(0);
   const refresh = () => setTick((t) => t + 1);
 
-  // Re-render on any cross-screen data change, active-run change, or timer tick.
   useEffect(() => {
     const offSignal = subscribeToSignals((s) => {
       if (!meetId || s.meetId === meetId) refresh();
@@ -74,13 +147,11 @@ export default function LiveSite() {
   const liveEvent = activeRun && activeRun.meetId === meetId ? activeRun : null;
 
   const resultsData = useMemo(() => {
-    try {
-      return buildResults(meetId);
-    } catch {
-      return null;
-    }
+    try { return buildResults(meetId); } catch { return null; }
   }, [tick, meetId]);
   const completed = (resultsData?.events ?? []).filter((e) => e.results.length > 0);
+
+  const heatSheetData = useMemo(() => buildHeatSheetData(meetId), [tick, meetId]);
 
   const deadline = readDeadline(meetId);
   const remaining = deadline != null ? deadline - Date.now() : null;
@@ -153,8 +224,7 @@ export default function LiveSite() {
               </div>
             </div>
             <p className="text-sm text-amber-100/80 mt-2">
-              Declare finals scratches before the timer expires. When it reaches zero, scratches are processed
-              automatically and finals are re-seeded per USA Swimming rules.
+              Declare finals scratches before the timer expires.
             </p>
           </div>
         )}
@@ -165,13 +235,22 @@ export default function LiveSite() {
         )}
 
         <Tabs defaultValue="schedule">
-          <TabsList className="bg-white/5 border border-white/10">
+          <TabsList className="bg-white/5 border border-white/10 flex-wrap h-auto gap-1 p-1">
             <TabsTrigger value="schedule">Schedule</TabsTrigger>
+            <TabsTrigger value="heatsheet">
+              <Layers className="h-3.5 w-3.5 mr-1.5" />
+              Heat Sheet
+              {heatSheetData.length > 0 && (
+                <Badge className="ml-1.5 bg-sky-600/80 text-white text-[10px] px-1.5 border-0">
+                  {heatSheetData.length}
+                </Badge>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="results">Results</TabsTrigger>
             <TabsTrigger value="scratch">ScratchPad</TabsTrigger>
           </TabsList>
 
-          {/* Schedule */}
+          {/* ── Schedule ── */}
           <TabsContent value="schedule" className="mt-4">
             {events.length === 0 ? (
               <Empty>No events have been added yet.</Empty>
@@ -196,7 +275,22 @@ export default function LiveSite() {
             )}
           </TabsContent>
 
-          {/* Results */}
+          {/* ── Heat Sheet ── */}
+          <TabsContent value="heatsheet" className="mt-4">
+            {heatSheetData.length === 0 ? (
+              <Empty>
+                No seeded events yet. Events need to be seeded in SwimManager before the heat sheet appears here.
+              </Empty>
+            ) : (
+              <div className="space-y-5">
+                {heatSheetData.map((ev) => (
+                  <HeatEventBlock key={ev.eventId} ev={ev} />
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* ── Results ── */}
           <TabsContent value="results" className="mt-4">
             {completed.length === 0 ? (
               <Empty>No results posted yet. They'll appear here as heats finish.</Empty>
@@ -231,7 +325,7 @@ export default function LiveSite() {
             )}
           </TabsContent>
 
-          {/* ScratchPad */}
+          {/* ── ScratchPad ── */}
           <TabsContent value="scratch" className="mt-4">
             <ScratchPad meetId={meetId} events={events} />
           </TabsContent>
@@ -244,6 +338,101 @@ export default function LiveSite() {
     </div>
   );
 }
+
+// ─── Heat Sheet components ─────────────────────────────────────────────────────
+
+function HeatEventBlock({ ev }: { ev: HeatEvent }) {
+  const [expanded, setExpanded] = useState(true);
+  const totalHeats = ev.heats.length;
+  const totalLanes = ev.heats.reduce((sum, h) => sum + h.lanes.filter((l) => l.athleteName !== "—").length, 0);
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
+      {/* Event header — click to collapse */}
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-white/5 transition-colors"
+      >
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-mono text-cyan-400/80 text-sm">Event {ev.eventNumber}</span>
+            <span className="font-bold text-base">{ev.title}</span>
+          </div>
+          <div className="text-xs text-cyan-200/50 mt-0.5">
+            {totalHeats} {totalHeats === 1 ? "heat" : "heats"} · {totalLanes} {totalLanes === 1 ? "entry" : "entries"}
+          </div>
+        </div>
+        <span className="text-cyan-400/50 text-lg">{expanded ? "▲" : "▼"}</span>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-white/10 divide-y divide-white/5">
+          {ev.heats.map((heat) => (
+            <HeatBlock key={heat.heatNumber} heat={heat} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HeatBlock({ heat }: { heat: HeatRow }) {
+  return (
+    <div>
+      {/* Heat label */}
+      <div className="px-5 py-2 bg-sky-900/30 flex items-center gap-2">
+        <Layers className="h-3.5 w-3.5 text-sky-400" />
+        <span className="text-xs font-bold text-sky-300 uppercase tracking-wider">Heat {heat.heatNumber}</span>
+      </div>
+
+      {/* Lanes table */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-[11px] text-cyan-200/40 uppercase tracking-wider font-semibold">
+              <th className="px-5 py-2 text-left w-12">Lane</th>
+              <th className="px-3 py-2 text-left">Athlete</th>
+              <th className="px-3 py-2 text-left hidden sm:table-cell">Team</th>
+              <th className="px-3 py-2 text-center hidden sm:table-cell w-12">Age</th>
+              <th className="px-3 py-2 text-right pr-5 w-24">Seed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {heat.lanes.map((lane) => {
+              const empty = lane.athleteName === "—";
+              return (
+                <tr key={lane.lane} className={`border-t border-white/5 ${empty ? "opacity-30" : ""}`}>
+                  <td className="px-5 py-2.5 font-black text-sky-400 text-base text-center w-12">
+                    {lane.lane}
+                  </td>
+                  <td className="px-3 py-2.5 font-medium">
+                    {empty ? <span className="text-cyan-200/30 italic text-xs">empty</span> : lane.athleteName}
+                    {/* Show team inline on mobile */}
+                    {!empty && (
+                      <span className="sm:hidden ml-2 text-xs text-cyan-300/50 font-mono">{lane.teamAbbr}</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5 text-cyan-300/60 font-mono text-xs hidden sm:table-cell">
+                    {empty ? "" : lane.teamAbbr}
+                  </td>
+                  <td className="px-3 py-2.5 text-center text-cyan-200/50 text-xs hidden sm:table-cell">
+                    {empty ? "" : lane.age}
+                  </td>
+                  <td className="px-3 py-2.5 pr-5 text-right font-mono text-sky-200/80 font-semibold tabular-nums">
+                    {empty ? "" : lane.seedTime != null ? formatTime(lane.seedTime) : "NT"}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Shared helpers ────────────────────────────────────────────────────────────
 
 function fmt(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));
