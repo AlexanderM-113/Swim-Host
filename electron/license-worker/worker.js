@@ -181,8 +181,12 @@ async function handleAdminList(request, env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    const method = request.method.toUpperCase();
 
-    if (request.method === "OPTIONS") {
+    // Strip trailing slash and lowercase the path
+    const path = url.pathname.replace(/\/+$/, "").toLowerCase() || "/";
+
+    if (method === "OPTIONS") {
       return new Response(null, {
         headers: {
           "Access-Control-Allow-Origin": "*",
@@ -192,19 +196,29 @@ export default {
       });
     }
 
-    if (request.method === "POST" && url.pathname === "/activate") {
+    // Status check — visit the root URL to confirm the worker is live
+    if (method === "GET" && path === "/") {
+      return json({ ok: true, service: "SwimManager License Server", status: "running" });
+    }
+
+    if (method === "POST" && path === "/activate") {
       return handleActivate(request, env);
     }
-    if (request.method === "POST" && url.pathname === "/admin/create") {
+    if (method === "POST" && path === "/admin/create") {
       return handleAdminCreate(request, env);
     }
-    if (request.method === "POST" && url.pathname === "/admin/revoke") {
+    if (method === "POST" && path === "/admin/revoke") {
       return handleAdminRevoke(request, env);
     }
-    if (request.method === "GET" && url.pathname === "/admin/list") {
+    if (method === "GET" && path === "/admin/list") {
       return handleAdminList(request, env);
     }
 
-    return json({ ok: false, error: "Not found." }, 404);
+    // Debug helper — shows what path and method the worker actually received
+    return json({
+      ok: false,
+      error: "Not found.",
+      debug: { receivedMethod: method, receivedPath: path },
+    }, 404);
   },
 };
