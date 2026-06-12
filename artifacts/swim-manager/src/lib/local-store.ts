@@ -293,6 +293,33 @@ export interface Club {
   website?: string;
 }
 
+export interface TimeTrialEvent {
+  distance: number;
+  stroke: string;
+  course: string;
+}
+
+export interface TimeTrialResult {
+  athleteId: number;
+  eventIndex: number;
+  time?: number;
+  dq?: boolean;
+  ns?: boolean;
+  notes?: string;
+}
+
+export interface TimeTrialSession {
+  id: number;
+  title: string;
+  date: string;
+  groupName?: string;
+  athleteIds: number[];
+  workoutNotes?: string;
+  events: TimeTrialEvent[];
+  results: TimeTrialResult[];
+  createdAt: string;
+}
+
 export interface ActivityItem {
   id: string;
   type: string;
@@ -320,6 +347,7 @@ export interface AppStore {
   paymentPlans: PaymentPlan[];
   payments: Payment[];
   timeStandards: TimeStandard[];
+  timeTrialSessions: TimeTrialSession[];
   club: Club;
 }
 
@@ -399,6 +427,7 @@ const DEFAULT_STORE: AppStore = {
   paymentPlans: [],
   payments: [],
   timeStandards: [],
+  timeTrialSessions: [],
   club: { id: 1, name: "My Swimming Club" },
 };
 
@@ -1570,6 +1599,77 @@ export function useUpdateSettings() {
       return settings;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["settings"] }),
+  });
+}
+
+// ─── Time Trial Sessions ──────────────────────────────────────────────────────
+
+export function useListTimeTrialSessions() {
+  return useQuery({
+    queryKey: ["timeTrialSessions"],
+    queryFn: () =>
+      (readStore().timeTrialSessions ?? [])
+        .slice()
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    staleTime: 0,
+  });
+}
+
+export function useGetTimeTrialSession(id?: number) {
+  return useQuery({
+    queryKey: ["timeTrialSession", id],
+    queryFn: () => (readStore().timeTrialSessions ?? []).find((s) => s.id === id) ?? null,
+    enabled: id != null,
+    staleTime: 0,
+  });
+}
+
+export function useCreateTimeTrialSession() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ data }: { data: Omit<TimeTrialSession, "id" | "createdAt"> }) => {
+      const store = readStore();
+      const session: TimeTrialSession = {
+        ...data,
+        id: nextId(store.timeTrialSessions ?? []),
+        createdAt: now(),
+      };
+      writeStore({ ...store, timeTrialSessions: [...(store.timeTrialSessions ?? []), session] });
+      return session;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["timeTrialSessions"] }),
+  });
+}
+
+export function useUpdateTimeTrialSession() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<TimeTrialSession> }) => {
+      const store = readStore();
+      const updated = (store.timeTrialSessions ?? []).map((s) =>
+        s.id === id ? { ...s, ...data } : s
+      );
+      writeStore({ ...store, timeTrialSessions: updated });
+      return updated.find((s) => s.id === id)!;
+    },
+    onSuccess: (_r, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ["timeTrialSessions"] });
+      queryClient.invalidateQueries({ queryKey: ["timeTrialSession", id] });
+    },
+  });
+}
+
+export function useDeleteTimeTrialSession() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }: { id: number }) => {
+      const store = readStore();
+      writeStore({
+        ...store,
+        timeTrialSessions: (store.timeTrialSessions ?? []).filter((s) => s.id !== id),
+      });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["timeTrialSessions"] }),
   });
 }
 

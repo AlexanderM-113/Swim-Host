@@ -22,7 +22,7 @@ import {
 } from "@/lib/csv";
 import {
   Upload, Download, FileText, CheckCircle2, AlertTriangle, Loader2,
-  Users, Calendar, Trophy, FileSpreadsheet
+  Users, Calendar, Trophy, FileSpreadsheet, Info, UserCheck, Swords, ClipboardList, Building2
 } from "lucide-react";
 
 // ─── SDIF date parsing (MMDDYYYY → YYYY-MM-DD) ───────────────────────────────
@@ -38,6 +38,159 @@ const SDIF_STROKE_MAP: Record<number, string> = {
   1: "Freestyle", 2: "Backstroke", 3: "Breaststroke", 4: "Butterfly",
   5: "Individual Medley", 6: "Freestyle Relay", 7: "Medley Relay",
 };
+
+// ─── SD3 file content analysis ───────────────────────────────────────────────
+
+export interface SD3ContentAnalysis {
+  hasFileHeader: boolean;
+  hasMeetRecord: boolean;
+  hasTeamRecords: boolean;
+  hasAthleteEntries: boolean;  // D0 records
+  hasResults: boolean;         // D3 records
+  hasRelayEntries: boolean;    // E0 records
+  hasRelayResults: boolean;    // E1 records
+  hasRelayNames: boolean;      // F0 records
+  teamCount: number;
+  entryCount: number;
+  resultCount: number;
+  athleteCount: number;        // unique athletes
+  recordTypes: string[];
+}
+
+function analyzeSD3Content(rawText: string): SD3ContentAnalysis {
+  const lines = rawText.split(/\r?\n/).filter((l) => l.length >= 2);
+  const typeCounts: Record<string, number> = {};
+  const athletes = new Set<string>();
+
+  for (const line of lines) {
+    const tag = line.substring(0, 2);
+    typeCounts[tag] = (typeCounts[tag] ?? 0) + 1;
+    if (tag === "D0" || tag === "D3") {
+      const lname = line.substring(3, 21).trim();
+      const fname = line.substring(21, 29).trim();
+      if (lname || fname) athletes.add(`${lname}:${fname}`);
+    }
+  }
+
+  const teamCodes = new Set<string>();
+  for (const line of lines) {
+    if (line.startsWith("C1")) {
+      teamCodes.add(line.substring(3, 7).trim());
+    }
+  }
+
+  return {
+    hasFileHeader: (typeCounts["A0"] ?? 0) > 0,
+    hasMeetRecord: (typeCounts["B1"] ?? 0) > 0,
+    hasTeamRecords: (typeCounts["C1"] ?? 0) > 0,
+    hasAthleteEntries: (typeCounts["D0"] ?? 0) > 0,
+    hasResults: (typeCounts["D3"] ?? 0) > 0,
+    hasRelayEntries: (typeCounts["E0"] ?? 0) > 0,
+    hasRelayResults: (typeCounts["E1"] ?? 0) > 0,
+    hasRelayNames: (typeCounts["F0"] ?? 0) > 0,
+    teamCount: teamCodes.size,
+    entryCount: typeCounts["D0"] ?? 0,
+    resultCount: typeCounts["D3"] ?? 0,
+    athleteCount: athletes.size,
+    recordTypes: Object.keys(typeCounts).sort(),
+  };
+}
+
+const SD3_RECORD_LABELS: Record<string, { label: string; desc: string; color: string }> = {
+  A0: { label: "File Header", desc: "Software & creation info", color: "bg-slate-500/20 text-slate-300 border-slate-500/40" },
+  B1: { label: "Meet Info", desc: "Name, dates, facility, course", color: "bg-blue-500/20 text-blue-300 border-blue-500/40" },
+  C1: { label: "Team Records", desc: "Team codes and names", color: "bg-purple-500/20 text-purple-300 border-purple-500/40" },
+  D0: { label: "Entries (D0)", desc: "Individual event entries + seed times", color: "bg-cyan-500/20 text-cyan-300 border-cyan-500/40" },
+  D3: { label: "Results (D3)", desc: "Individual finish times, places, DQ codes", color: "bg-green-500/20 text-green-300 border-green-500/40" },
+  E0: { label: "Relay Entries", desc: "Relay event entries", color: "bg-amber-500/20 text-amber-300 border-amber-500/40" },
+  E1: { label: "Relay Results", desc: "Relay finish times", color: "bg-orange-500/20 text-orange-300 border-orange-500/40" },
+  F0: { label: "Relay Names", desc: "Relay team member names", color: "bg-pink-500/20 text-pink-300 border-pink-500/40" },
+  Z0: { label: "End of File", desc: "File terminator", color: "bg-muted/50 text-muted-foreground border-border" },
+};
+
+function SD3ContentBadges({ analysis }: { analysis: SD3ContentAnalysis }) {
+  return (
+    <Card className="border-primary/20 bg-primary/5">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <Info className="h-4 w-4 text-primary" />
+          File Content Analysis — What's in this .sd3 file
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex flex-wrap gap-2">
+          {analysis.recordTypes.map((tag) => {
+            const meta = SD3_RECORD_LABELS[tag];
+            if (!meta) return null;
+            return (
+              <div
+                key={tag}
+                className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${meta.color}`}
+              >
+                <span className="font-mono font-bold">{tag}</span>
+                <span>{meta.label}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+          {analysis.hasTeamRecords && (
+            <div className="flex items-center gap-2 text-sm">
+              <Building2 className="h-4 w-4 text-purple-400 shrink-0" />
+              <div>
+                <div className="font-semibold">{analysis.teamCount} teams</div>
+                <div className="text-xs text-muted-foreground">C1 records</div>
+              </div>
+            </div>
+          )}
+          {analysis.hasAthleteEntries && (
+            <div className="flex items-center gap-2 text-sm">
+              <UserCheck className="h-4 w-4 text-cyan-400 shrink-0" />
+              <div>
+                <div className="font-semibold">{analysis.athleteCount} athletes</div>
+                <div className="text-xs text-muted-foreground">{analysis.entryCount} entry records</div>
+              </div>
+            </div>
+          )}
+          {analysis.hasResults && (
+            <div className="flex items-center gap-2 text-sm">
+              <Trophy className="h-4 w-4 text-green-400 shrink-0" />
+              <div>
+                <div className="font-semibold">{analysis.resultCount} results</div>
+                <div className="text-xs text-muted-foreground">D3 finish times</div>
+              </div>
+            </div>
+          )}
+          {(analysis.hasRelayEntries || analysis.hasRelayResults) && (
+            <div className="flex items-center gap-2 text-sm">
+              <Swords className="h-4 w-4 text-amber-400 shrink-0" />
+              <div>
+                <div className="font-semibold">Relays</div>
+                <div className="text-xs text-muted-foreground">E0/E1 records</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="text-xs text-muted-foreground border-t border-border pt-2 mt-2">
+          {analysis.hasAthleteEntries && !analysis.hasResults && (
+            <span className="text-cyan-400 font-medium">→ This file contains entries only (pre-meet). Import will create the meet, teams, athletes, and seed times.</span>
+          )}
+          {analysis.hasResults && !analysis.hasAthleteEntries && (
+            <span className="text-green-400 font-medium">→ This file contains results only (post-meet). Import will bring in finish times.</span>
+          )}
+          {analysis.hasResults && analysis.hasAthleteEntries && (
+            <span className="text-primary font-medium">→ This file contains both entries and results. Import will bring in full meet data including finish times.</span>
+          )}
+          {!analysis.hasAthleteEntries && !analysis.hasResults && (
+            <span className="text-amber-400 font-medium">→ No individual event data found. File may contain only team/meet header records.</span>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 // ─── Local SDIF import ────────────────────────────────────────────────────────
 
@@ -192,6 +345,7 @@ function importSDIFLocally(sdif: SDIFFile): {
 function ImportTab() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [parsed, setParsed] = useState<SDIFImportSummary | null>(null);
+  const [contentAnalysis, setContentAnalysis] = useState<SD3ContentAnalysis | null>(null);
   const [rawFile, setRawFile] = useState<string>("");
   const [fileName, setFileName] = useState("");
   const [importing, setImporting] = useState(false);
@@ -206,10 +360,13 @@ function ImportTab() {
     setError(null);
     setImportResult(null);
     setParsed(null);
+    setContentAnalysis(null);
 
     try {
       const text = await file.text();
       setRawFile(text);
+      const analysis = analyzeSD3Content(text);
+      setContentAnalysis(analysis);
       const sdif = parseSDIF(text);
       const summary = summarizeSDIF(sdif);
       setParsed(summary);
@@ -273,6 +430,10 @@ function ImportTab() {
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>{error}</AlertDescription>
             </Alert>
+          )}
+
+          {contentAnalysis && !error && (
+            <SD3ContentBadges analysis={contentAnalysis} />
           )}
 
           {importResult && (

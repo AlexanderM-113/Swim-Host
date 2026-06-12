@@ -488,12 +488,37 @@ function WorkoutCard({ workout }: { workout: DryLandWorkout }) {
   );
 }
 
+const ALL_FOCUS_AREAS = Array.from(new Set(WORKOUTS.map((w) => w.focus)));
+
+const FOCUS_KEYWORDS: Record<string, string> = {
+  "Movement Prep & Body Awareness": "Movement Prep",
+  "Upper & Lower Body Basics": "Upper/Lower",
+  "Rotational Power & Stability": "Rotational Power",
+  "Explosive Starts & Turns": "Explosiveness",
+  "Streamline Position & Range of Motion": "Flexibility",
+  "Stroke-Specific Strength": "Stroke-Specific",
+  "Full-Body Integration": "Full-Body",
+};
+
 export default function DryLandProgram() {
   const [filterIntensity, setFilterIntensity] = useState<string>("All");
+  const [filterFocus, setFilterFocus] = useState<string>("All");
+  const [filterWeek, setFilterWeek] = useState<string>("All");
 
-  const filtered = WORKOUTS.filter(
-    (w) => filterIntensity === "All" || w.intensity === filterIntensity
-  );
+  const filtered = WORKOUTS.filter((w) => {
+    if (filterIntensity !== "All" && w.intensity !== filterIntensity) return false;
+    if (filterFocus !== "All" && w.focus !== filterFocus) return false;
+    if (filterWeek !== "All" && String(w.week) !== filterWeek) return false;
+    return true;
+  });
+
+  const activeFilterCount = [filterIntensity, filterFocus, filterWeek].filter((f) => f !== "All").length;
+
+  function clearFilters() {
+    setFilterIntensity("All");
+    setFilterFocus("All");
+    setFilterWeek("All");
+  }
 
   return (
     <div className="space-y-4">
@@ -507,21 +532,70 @@ export default function DryLandProgram() {
             7-week progressive dry land program — 30 minutes per session
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Target className="h-4 w-4 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">Filter:</span>
-          {["All", "Low", "Moderate", "High"].map((f) => (
-            <Button
-              key={f}
-              size="sm"
-              variant={filterIntensity === f ? "default" : "outline"}
-              className="h-7 text-xs px-3"
-              onClick={() => setFilterIntensity(f)}
-            >
-              {f}
-            </Button>
-          ))}
-        </div>
+        {activeFilterCount > 0 && (
+          <Button size="sm" variant="ghost" className="text-xs h-7 text-muted-foreground" onClick={clearFilters}>
+            Clear {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""}
+          </Button>
+        )}
+      </div>
+
+      {/* Refiner row 1 — Intensity */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Target className="h-4 w-4 text-muted-foreground shrink-0" />
+        <span className="text-xs text-muted-foreground font-medium w-14 shrink-0">Intensity</span>
+        {["All", "Low", "Moderate", "High"].map((f) => (
+          <Button
+            key={f}
+            size="sm"
+            variant={filterIntensity === f ? "default" : "outline"}
+            className="h-7 text-xs px-3"
+            onClick={() => setFilterIntensity(f)}
+          >
+            {f}
+          </Button>
+        ))}
+      </div>
+
+      {/* Refiner row 2 — Focus Area */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Flame className="h-4 w-4 text-amber-500 shrink-0" />
+        <span className="text-xs text-muted-foreground font-medium w-14 shrink-0">Focus</span>
+        <Button
+          size="sm"
+          variant={filterFocus === "All" ? "default" : "outline"}
+          className="h-7 text-xs px-3"
+          onClick={() => setFilterFocus("All")}
+        >
+          All
+        </Button>
+        {ALL_FOCUS_AREAS.map((f) => (
+          <Button
+            key={f}
+            size="sm"
+            variant={filterFocus === f ? "default" : "outline"}
+            className="h-7 text-xs px-3"
+            onClick={() => setFilterFocus(f)}
+          >
+            {FOCUS_KEYWORDS[f] ?? f}
+          </Button>
+        ))}
+      </div>
+
+      {/* Refiner row 3 — Week */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Clock className="h-4 w-4 text-cyan-500 shrink-0" />
+        <span className="text-xs text-muted-foreground font-medium w-14 shrink-0">Week</span>
+        {["All", ...WORKOUTS.map((w) => String(w.week))].map((f) => (
+          <Button
+            key={f}
+            size="sm"
+            variant={filterWeek === f ? "default" : "outline"}
+            className="h-7 text-xs px-3"
+            onClick={() => setFilterWeek(f)}
+          >
+            {f === "All" ? "All" : `Wk ${f}`}
+          </Button>
+        ))}
       </div>
 
       {/* Program overview */}
@@ -546,9 +620,15 @@ export default function DryLandProgram() {
 
       {/* Workout cards */}
       <div className="space-y-3">
-        {filtered.map((w) => (
-          <WorkoutCard key={w.week} workout={w} />
-        ))}
+        {filtered.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground text-sm">
+            No workouts match the selected filters.
+          </div>
+        ) : (
+          filtered.map((w) => (
+            <WorkoutCard key={w.week} workout={w} />
+          ))
+        )}
       </div>
 
       <p className="text-xs text-muted-foreground text-center pt-2">

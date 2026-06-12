@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useListWorkouts } from "@/lib/local-store";
 import { Link } from "wouter";
-import { Plus, Search, Dumbbell, Waves } from "lucide-react";
+import { Plus, Search, Dumbbell, Waves, ClipboardList } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/table";
 import { format } from "date-fns";
 import DryLandProgram from "./dryland";
+import TimeTrialsManager from "./time-trials";
 
 function SwimWorkouts() {
   const { data: workouts, isLoading } = useListWorkouts();
@@ -112,6 +113,10 @@ export default function Workouts() {
             <Dumbbell className="h-4 w-4 mr-1.5" />
             Dry Land Program
           </TabsTrigger>
+          <TabsTrigger value="timetrials">
+            <ClipboardList className="h-4 w-4 mr-1.5" />
+            Time Trials
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="swim" className="mt-4">
@@ -120,6 +125,10 @@ export default function Workouts() {
 
         <TabsContent value="dryland" className="mt-4">
           <DryLandProgram />
+        </TabsContent>
+
+        <TabsContent value="timetrials" className="mt-4">
+          <TimeTrialsManager />
         </TabsContent>
       </Tabs>
     </div>
