@@ -27,7 +27,7 @@ interface GroupForm {
 }
 const BLANK_GROUP: GroupForm = {
   name: "", description: "", coachName: "", level: "Age Group A",
-  practiceSchedule: "", color: "#3B82F6", teamId: "",
+  practiceSchedule: "", color: "#3B82F6", teamId: "none",
 };
 
 function fetchGroups() { return fetch("/api/groups").then(r => r.json()); }
@@ -122,12 +122,12 @@ export default function GroupsPage() {
     setGroupForm({
       name: g.name, description: g.description || "", coachName: g.coachName || "",
       level: g.level || "Age Group A", practiceSchedule: g.practiceSchedule || "",
-      color: g.color || "#3B82F6", teamId: g.teamId ? String(g.teamId) : "",
+      color: g.color || "#3B82F6", teamId: g.teamId ? String(g.teamId) : "none",
     });
     setGroupDialog(true);
   }
   function submitGroup() {
-    const payload = { ...groupForm, teamId: groupForm.teamId ? parseInt(groupForm.teamId) : null };
+    const payload = { ...groupForm, teamId: groupForm.teamId && groupForm.teamId !== "none" ? parseInt(groupForm.teamId) : null };
     if (editGroupId) updateGroup.mutate({ id: editGroupId, data: payload });
     else createGroup.mutate(payload);
   }
@@ -312,7 +312,7 @@ export default function GroupsPage() {
                 <Select value={groupForm.teamId} onValueChange={v => setGroupForm(f => ({ ...f, teamId: v }))}>
                   <SelectTrigger><SelectValue placeholder="Any team" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Any team</SelectItem>
+                    <SelectItem value="none">Any team</SelectItem>
                     {(teams as any[]).map((t: any) => <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>)}
                   </SelectContent>
                 </Select>

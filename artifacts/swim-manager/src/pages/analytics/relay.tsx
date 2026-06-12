@@ -89,6 +89,7 @@ export default function RelayBuilder() {
 
   const [relayType, setRelayType] = useState<string>("4x100-free");
   const [gender, setGender] = useState<string>("M");
+  // "any" is the internal sentinel for no gender filter (avoids empty-string SelectItem)
   const [selectedMeet, setSelectedMeet] = useState<string>("all");
   const [selectedAthletes, setSelectedAthletes] = useState<Set<number>>(new Set());
   const [relayTeams, setRelayTeams] = useState<any[]>([]);
@@ -123,7 +124,7 @@ export default function RelayBuilder() {
 
   const athletePool = useMemo((): AthleteWithTimes[] => {
     return (athletes as any[])
-      .filter((a: any) => !gender || a.gender === gender)
+      .filter((a: any) => gender === "any" || !gender || a.gender === gender)
       .map((a: any) => ({
         id: a.id,
         name: `${a.firstName} ${a.lastName}`,
@@ -263,7 +264,7 @@ export default function RelayBuilder() {
                 <SelectContent>
                   <SelectItem value="M">Men / Boys</SelectItem>
                   <SelectItem value="F">Women / Girls</SelectItem>
-                  <SelectItem value="">Mixed / Any</SelectItem>
+                  <SelectItem value="any">Mixed / Any</SelectItem>
                 </SelectContent>
               </Select>
             </div>
