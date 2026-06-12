@@ -4,6 +4,7 @@ import {
   Activity, Users, MapPin, Settings, ReceiptText, Trophy,
   FileText, Globe, Monitor, ArrowLeftRight, Timer, Star, Layers,
   Dumbbell, Waves, LayoutGrid, Sparkles, ChevronLeft, ChevronRight, Menu, X,
+  HandCoins, UserCheck, Droplets,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useModule } from "@/contexts/module-context";
@@ -28,20 +29,24 @@ const ALL_NAV: NavItem[] = [
   { name: "Web Generator", href: "/webgen", icon: Globe },
   { name: "Scoreboard", href: "/scoreboard", icon: Monitor },
   { name: "Smart Features", href: "/analytics", icon: Sparkles },
+  { name: "Fundraising", href: "/fundraising", icon: HandCoins },
+  { name: "Volunteers", href: "/volunteers", icon: UserCheck },
+  { name: "Diving Manager", href: "/diving", icon: Droplets },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
 const MODULE_NAV: Record<string, string[]> = {
-  meet: ["/", "/meets", "/timing", "/reports", "/sdif", "/scoreboard", "/analytics", "/settings"],
-  team: ["/", "/athletes", "/teams", "/groups", "/records", "/time-standards", "/billing", "/billing/payment-plans", "/reports", "/analytics", "/settings"],
+  meet: ["/", "/meets", "/timing", "/reports", "/sdif", "/scoreboard", "/analytics", "/diving", "/volunteers", "/settings"],
+  team: ["/", "/athletes", "/teams", "/groups", "/records", "/time-standards", "/billing", "/billing/payment-plans", "/reports", "/analytics", "/fundraising", "/volunteers", "/settings"],
   workout: ["/", "/workouts", "/athletes", "/groups", "/analytics", "/settings"],
 };
 
 const MODULE_SECTIONS: Record<string, { label: string; hrefs: string[] }[]> = {
   meet: [
-    { label: "Meet Management", hrefs: ["/meets", "/timing"] },
+    { label: "Meet Management", hrefs: ["/meets", "/timing", "/diving"] },
     { label: "Tools", hrefs: ["/reports", "/sdif", "/scoreboard"] },
     { label: "Smart Features", hrefs: ["/analytics"] },
+    { label: "Club Ops", hrefs: ["/volunteers"] },
     { label: "System", hrefs: ["/settings"] },
   ],
   team: [
@@ -49,6 +54,7 @@ const MODULE_SECTIONS: Record<string, { label: string; hrefs: string[] }[]> = {
     { label: "Records & Finance", hrefs: ["/records", "/time-standards", "/billing", "/billing/payment-plans"] },
     { label: "Tools", hrefs: ["/reports"] },
     { label: "Smart Features", hrefs: ["/analytics"] },
+    { label: "Club Ops", hrefs: ["/fundraising", "/volunteers"] },
     { label: "System", hrefs: ["/settings"] },
   ],
   workout: [

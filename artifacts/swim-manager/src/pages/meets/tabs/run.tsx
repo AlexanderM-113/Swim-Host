@@ -14,9 +14,65 @@ import { Progress } from "@/components/ui/progress";
 import { formatTime, parseTime } from "@/lib/format-time";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { CheckCircle, Edit2, Wifi, Send, Loader2, Radio, Play, Square } from "lucide-react";
+import { CheckCircle, Edit2, Wifi, Send, Loader2, Radio, Play, Square, Timer, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { broadcastRun, broadcastSignal, broadcastDataChanged, subscribeToSignals } from "@/lib/live-broadcast";
 import { autoPushLiveResults } from "@/lib/live-push";
+import { cn } from "@/lib/utils";
+
+const SCRATCH_DEADLINE_KEY = (meetId: number, eventId: number) => `swimmanager_scratch_deadline_${meetId}_${eventId}`;
+
+function useScratchTimer(meetId: number, eventId: number | null) {
+  const [deadline, setDeadlineState] = useState<number | null>(() => {
+    if (!eventId) return null;
+    const v = localStorage.getItem(SCRATCH_DEADLINE_KEY(meetId, eventId));
+    return v ? parseInt(v) : null;
+  });
+  const [remaining, setRemaining] = useState<number>(0);
+
+  useEffect(() => {
+    if (!eventId) { setDeadlineState(null); return; }
+    const v = localStorage.getItem(SCRATCH_DEADLINE_KEY(meetId, eventId));
+    setDeadlineState(v ? parseInt(v) : null);
+  }, [eventId, meetId]);
+
+  useEffect(() => {
+    if (!deadline) { setRemaining(0); return; }
+    const tick = () => setRemaining(Math.max(0, deadline - Date.now()));
+    tick();
+    const id = setInterval(tick, 500);
+    return () => clearInterval(id);
+  }, [deadline]);
+
+  function startTimer() {
+    if (!eventId) return;
+    const dl = Date.now() + 30 * 60 * 1000;
+    localStorage.setItem(SCRATCH_DEADLINE_KEY(meetId, eventId), String(dl));
+    setDeadlineState(dl);
+  }
+
+  function clearTimer() {
+    if (!eventId) return;
+    localStorage.removeItem(SCRATCH_DEADLINE_KEY(meetId, eventId));
+    setDeadlineState(null);
+  }
+
+  return { deadline, remaining, startTimer, clearTimer, expired: deadline !== null && remaining === 0 };
+}
+
+function ScratchTimerBadge({ remaining, expired, deadline }: { remaining: number; expired: boolean; deadline: number | null }) {
+  if (!deadline) return null;
+  const mm = Math.floor(remaining / 60000);
+  const ss = Math.floor((remaining % 60000) / 1000);
+  if (expired) {
+    return <Badge className="bg-red-600 text-white gap-1 text-xs"><AlertTriangle className="h-3 w-3" />Scratch Window CLOSED</Badge>;
+  }
+  return (
+    <Badge className={cn("gap-1 text-xs font-mono", remaining < 5 * 60_000 ? "bg-amber-500 text-black" : "bg-cyan-700 text-white")}>
+      <Timer className="h-3 w-3" />
+      Scratch window: {String(mm).padStart(2, "0")}:{String(ss).padStart(2, "0")}
+    </Badge>
+  );
+}
 
 interface ResultForm {
   finishTime: string;
@@ -57,6 +113,18 @@ export default function MeetRun({ meetId }: { meetId: number }) {
   const [pushing, setPushing] = useState(false);
   const [lastPush, setLastPush] = useState<string | null>(null);
   const [racingHeat, setRacingHeat] = useState<number | null>(null);
+
+  const eventIdNum = selectedEvent ? parseInt(selectedEvent, 10) : null;
+  const scratchTimer = useScratchTimer(meetId, eventIdNum);
+  const availableEvents = events?.filter((e) => e.status === "seeded" || e.status === "completed") ?? [];
+  const currentEventIdx = availableEvents.findIndex((e) => String(e.id) === selectedEvent);
+
+  function goToPrevEvent() {
+    if (currentEventIdx > 0) setSelectedEvent(String(availableEvents[currentEventIdx - 1].id));
+  }
+  function goToNextEvent() {
+    if (currentEventIdx < availableEvents.length - 1) setSelectedEvent(String(availableEvents[currentEventIdx + 1].id));
+  }
 
   useEffect(() => {
     if (!selectedEvent || !events) return;
@@ -156,6 +224,7 @@ export default function MeetRun({ meetId }: { meetId: number }) {
     if (!editLane?.entryId) return;
     const finishTimeSec = form.dq || form.ns || form.dnf ? null : parseTime(form.finishTime);
     const place = form.dq || form.ns || form.dnf ? null : (parseInt(form.place) || null);
+    const savingHeat = editHeat;
     setResult.mutate(
       {
         eventId: parseInt(selectedEvent),
@@ -171,10 +240,23 @@ export default function MeetRun({ meetId }: { meetId: number }) {
       },
       {
         onSuccess: () => {
-          toast({ title: "Result saved" });
           setEditLane(null);
           queryClient.invalidateQueries({ queryKey: getListHeatsQueryKey(parseInt(selectedEvent)) });
-          refetch();
+          refetch().then((latest) => {
+            const updatedHeat = latest.data?.find((h: any) => h.heatNumber === savingHeat);
+            if (updatedHeat) {
+              const filledLanes = updatedHeat.lanes?.filter((l: any) => l.athleteId) ?? [];
+              const doneLanes = filledLanes.filter((l: any) => l.finishTime || l.dq || l.ns || l.dnf);
+              if (filledLanes.length > 0 && doneLanes.length === filledLanes.length) {
+                toast({ title: `Heat ${savingHeat} complete ✓`, description: "All results recorded for this heat." });
+                if (racingHeat === savingHeat) setRacingHeat(null);
+              } else {
+                toast({ title: "Result saved" });
+              }
+            } else {
+              toast({ title: "Result saved" });
+            }
+          });
           broadcastDataChanged(meetId);
           autoPushLiveResults(meetId)
             .then(() => setLastPush(new Date().toLocaleTimeString()))
@@ -213,79 +295,77 @@ export default function MeetRun({ meetId }: { meetId: number }) {
     sum + (h.lanes?.filter((l: any) => l.finishTime || l.dq || l.ns || l.dnf).length ?? 0), 0) ?? 0;
   const progress = totalEntries > 0 ? Math.round((completedEntries / totalEntries) * 100) : 0;
 
-  const availableEvents = events?.filter((e) => e.status === "seeded" || e.status === "completed") ?? [];
-
   return (
     <>
       <div className="space-y-4">
         {/* Header card */}
         <Card>
           <CardHeader>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex-1">
-                <CardTitle className="flex items-center gap-2">
-                  Live Meet Running
-                  {selectedEvent && (finals ?? []).length > 0 && (
-                    <Badge variant={isFinalsRound ? "default" : "secondary"} className={isFinalsRound ? "bg-amber-500 text-black" : ""}>
-                      {isFinalsRound ? "Finals Round" : "Prelims Round"}
-                    </Badge>
-                  )}
-                </CardTitle>
-                {selectedEvent && totalEntries > 0 && (
-                  <div className="mt-2 space-y-1">
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>{completedEntries}/{totalEntries} results entered</span>
-                      <span>{progress}%</span>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex-1">
+                  <CardTitle className="flex items-center gap-2 flex-wrap">
+                    Live Meet Running
+                    {selectedEvent && (finals ?? []).length > 0 && (
+                      <Badge variant={isFinalsRound ? "default" : "secondary"} className={isFinalsRound ? "bg-amber-500 text-black" : ""}>
+                        {isFinalsRound ? "Finals Round" : "Prelims Round"}
+                      </Badge>
+                    )}
+                    <ScratchTimerBadge remaining={scratchTimer.remaining} expired={scratchTimer.expired} deadline={scratchTimer.deadline} />
+                  </CardTitle>
+                  {selectedEvent && totalEntries > 0 && (
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>{completedEntries}/{totalEntries} results entered</span>
+                        <span>{progress}%</span>
+                      </div>
+                      <Progress value={progress} className="h-1.5" />
                     </div>
-                    <Progress value={progress} className="h-1.5" />
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {selectedEvent && (
-                  <div className="flex items-center gap-1.5 text-xs text-cyan-600 dark:text-cyan-400 font-medium">
-                    <Radio className="h-3.5 w-3.5 animate-pulse" />
-                    Broadcasting
-                  </div>
-                )}
-                {selectedEvent && (
-                  racingHeat !== null ? (
-                    <Button
-                      size="sm"
-                      onClick={stopRace}
-                      className="bg-red-600 hover:bg-red-700 text-white"
-                    >
-                      <Square className="h-4 w-4 mr-2" />
-                      Stop Heat {racingHeat}
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      onClick={startRace}
-                      className="bg-green-600 hover:bg-green-700 text-white"
-                    >
-                      <Play className="h-4 w-4 mr-2" />
-                      Start Race
-                    </Button>
-                  )
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={pushLiveResults}
-                  disabled={pushing}
-                  className={lastPush ? "border-green-500 text-green-700 hover:text-green-700" : ""}
-                >
-                  {pushing ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : lastPush ? (
-                    <Wifi className="h-4 w-4 mr-2" />
-                  ) : (
-                    <Send className="h-4 w-4 mr-2" />
                   )}
-                  {pushing ? "Pushing…" : lastPush ? `Pushed ${lastPush}` : "Push to Website"}
+                </div>
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                  {selectedEvent && (
+                    <div className="flex items-center gap-1.5 text-xs text-cyan-600 dark:text-cyan-400 font-medium">
+                      <Radio className="h-3.5 w-3.5 animate-pulse" />
+                      Broadcasting
+                    </div>
+                  )}
+                  {selectedEvent && (
+                    racingHeat !== null ? (
+                      <Button size="sm" onClick={stopRace} className="bg-red-600 hover:bg-red-700 text-white">
+                        <Square className="h-4 w-4 mr-2" />Stop Heat {racingHeat}
+                      </Button>
+                    ) : (
+                      <Button size="sm" onClick={startRace} className="bg-green-600 hover:bg-green-700 text-white">
+                        <Play className="h-4 w-4 mr-2" />Start Race
+                      </Button>
+                    )
+                  )}
+                  {selectedEvent && !scratchTimer.deadline && (
+                    <Button size="sm" variant="outline" onClick={scratchTimer.startTimer} title="Start 30-minute scratch window timer">
+                      <Timer className="h-3.5 w-3.5 mr-1.5" />Start Scratch Timer
+                    </Button>
+                  )}
+                  {selectedEvent && scratchTimer.deadline && (
+                    <Button size="sm" variant="outline" onClick={scratchTimer.clearTimer} className="text-muted-foreground">
+                      Clear Timer
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline" size="sm" onClick={pushLiveResults} disabled={pushing}
+                    className={lastPush ? "border-green-500 text-green-700 hover:text-green-700" : ""}
+                  >
+                    {pushing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : lastPush ? <Wifi className="h-4 w-4 mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+                    {pushing ? "Pushing…" : lastPush ? `Pushed ${lastPush}` : "Push to Website"}
+                  </Button>
+                </div>
+              </div>
+              {/* Event selector with prev/next */}
+              <div className="flex items-center gap-2">
+                <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" onClick={goToPrevEvent} disabled={currentEventIdx <= 0}>
+                  <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <div className="w-72">
+                <div className="flex-1">
                   <Select value={selectedEvent} onValueChange={setSelectedEvent}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select Event to Run" />
@@ -303,6 +383,14 @@ export default function MeetRun({ meetId }: { meetId: number }) {
                     </SelectContent>
                   </Select>
                 </div>
+                <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" onClick={goToNextEvent} disabled={currentEventIdx < 0 || currentEventIdx >= availableEvents.length - 1}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                {availableEvents.length > 0 && selectedEvent && (
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    {currentEventIdx + 1}/{availableEvents.length}
+                  </span>
+                )}
               </div>
             </div>
           </CardHeader>

@@ -44,6 +44,9 @@ import RelayBuilder from "@/pages/analytics/relay";
 import AthleteReadiness from "@/pages/analytics/readiness";
 import VideoAnalysis from "@/pages/analytics/video";
 import TechniqueAnalytics from "@/pages/analytics/technique";
+import FundraisingPage from "@/pages/fundraising";
+import VolunteersPage from "@/pages/volunteers";
+import DivingPage from "@/pages/diving";
 
 // Query/mutation failures are logged and surfaced as a single de-duplicated
 // toast instead of bubbling up as raw unhandled rejections.
@@ -146,6 +149,10 @@ function AppShell() {
         <Route path="/analytics/video" component={VideoAnalysis} />
         <Route path="/analytics/technique" component={TechniqueAnalytics} />
         <Route path="/analytics" component={SmartFeaturesHub} />
+
+        <Route path="/fundraising" component={FundraisingPage} />
+        <Route path="/volunteers" component={VolunteersPage} />
+        <Route path="/diving" component={DivingPage} />
 
         <Route component={NotFound} />
       </Switch>

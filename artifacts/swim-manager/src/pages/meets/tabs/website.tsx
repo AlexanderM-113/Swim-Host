@@ -123,7 +123,15 @@ export default function MeetWebsite({ meetId }: { meetId: number }) {
   async function pushToLive() {
     setPushing(true);
     try {
-      const payload = {
+      // Store live data in localStorage so the /live/:meetId page can read it
+      // directly without a running API server. The live page already reads
+      // from localStorage, so this is always the primary publish path.
+      const store = readStore();
+      const liveKey = `swimmanager_live_${meetId}`;
+      const livePayload = {
+        meetId,
+        pushedAt: new Date().toISOString(),
+        message: customMessage || undefined,
         events: events.map((e) => ({
           id: e.id,
           eventNumber: e.eventNumber,
@@ -134,24 +142,32 @@ export default function MeetWebsite({ meetId }: { meetId: number }) {
           status: e.status,
           isRelay: e.isRelay,
         })),
-        message: customMessage || undefined,
+        meet: store.meets.find((m) => m.id === meetId) ?? null,
+        results: store.results,
+        heats: store.heats,
+        entries: store.entries,
       };
-      const res = await fetch(`/api/live/${meetId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (res.ok) {
-        setLiveStatus("live");
-        setLastPushed(new Date().toISOString());
-        toast({ title: "Meet data pushed live", description: "Athletes and coaches can now view the live meet page." });
-      } else {
-        setLiveStatus("error");
-        toast({ title: "Push failed", variant: "destructive" });
-      }
-    } catch (e) {
+      localStorage.setItem(liveKey, JSON.stringify(livePayload));
+
+      // Also attempt to push to the API server if one is running (optional,
+      // enables multi-device viewing). Failures are silently swallowed because
+      // the local live page works without it.
+      try {
+        await fetch(`/api/live/${meetId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(livePayload),
+          signal: AbortSignal.timeout(3000),
+        });
+      } catch {}
+
+      setLiveStatus("live");
+      setLastPushed(new Date().toISOString());
+      broadcastDataChanged(meetId);
+      toast({ title: "Meet data pushed live", description: "The live meet page is now updated — athletes and coaches can view results." });
+    } catch (e: any) {
       setLiveStatus("error");
-      toast({ title: "Network error", variant: "destructive" });
+      toast({ title: "Push failed", description: e?.message, variant: "destructive" });
     }
     setPushing(false);
   }

@@ -332,6 +332,80 @@ export interface ActivityItem {
 
 // ─── Store shape ─────────────────────────────────────────────────────────────
 
+export interface Group {
+  id: number;
+  name: string;
+  description?: string;
+  coachName?: string;
+  level?: string;
+  practiceSchedule?: string;
+  color?: string;
+  teamId?: number | null;
+  createdAt: string;
+}
+
+export interface GroupMember {
+  id: number;
+  groupId: number;
+  athleteId: number;
+  joinedDate?: string;
+}
+
+export interface AttendanceRecord {
+  id: number;
+  groupId: number;
+  athleteId: number;
+  date: string;
+  present: boolean;
+}
+
+export interface FundraisingCampaign {
+  id: number;
+  name: string;
+  goal: number;
+  raised: number;
+  startDate: string;
+  endDate?: string;
+  description?: string;
+  status: "active" | "completed" | "draft";
+  createdAt: string;
+}
+
+export interface FundraisingDonation {
+  id: number;
+  campaignId: number;
+  donorName: string;
+  amount: number;
+  type: "donation" | "pledge" | "sponsorship";
+  notes?: string;
+  date: string;
+  createdAt: string;
+}
+
+export interface Volunteer {
+  id: number;
+  name: string;
+  email?: string;
+  phone?: string;
+  roles: string[];
+  notes?: string;
+  createdAt: string;
+}
+
+export interface VolunteerShift {
+  id: number;
+  volunteerId: number;
+  meetId?: number;
+  role: string;
+  date: string;
+  startTime?: string;
+  endTime?: string;
+  hours?: number;
+  confirmed: boolean;
+  reminderSent: boolean;
+  createdAt: string;
+}
+
 export interface AppStore {
   meets: Meet[];
   athletes: Athlete[];
@@ -350,6 +424,13 @@ export interface AppStore {
   timeStandards: TimeStandard[];
   timeTrialSessions: TimeTrialSession[];
   club: Club;
+  groups: Group[];
+  groupMembers: GroupMember[];
+  attendance: AttendanceRecord[];
+  fundraisingCampaigns: FundraisingCampaign[];
+  fundraisingDonations: FundraisingDonation[];
+  volunteers: Volunteer[];
+  volunteerShifts: VolunteerShift[];
 }
 
 const SAMPLE_WORKOUTS: Workout[] = [
@@ -430,6 +511,13 @@ const DEFAULT_STORE: AppStore = {
   timeStandards: [],
   timeTrialSessions: [],
   club: { id: 1, name: "My Swimming Club" },
+  groups: [],
+  groupMembers: [],
+  attendance: [],
+  fundraisingCampaigns: [],
+  fundraisingDonations: [],
+  volunteers: [],
+  volunteerShifts: [],
 };
 
 export interface AppSettings {
@@ -1688,4 +1776,374 @@ export function importAllData(json: string): void {
 
 export function clearAllData(): void {
   writeStore(DEFAULT_STORE);
+}
+
+// ─── Groups ───────────────────────────────────────────────────────────────────
+
+export function useListGroups() {
+  return useQuery({
+    queryKey: ["groups"],
+    queryFn: () => {
+      const store = readStore();
+      const groups = store.groups ?? [];
+      const members = store.groupMembers ?? [];
+      return groups.map((g) => ({
+        ...g,
+        memberCount: members.filter((m) => m.groupId === g.id).length,
+      }));
+    },
+    staleTime: 0,
+  });
+}
+
+export function useCreateGroup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ data }: { data: Omit<Group, "id" | "createdAt"> }) => {
+      const store = readStore();
+      const group: Group = { ...data, id: nextId(store.groups ?? []), createdAt: now() };
+      writeStore({ ...store, groups: [...(store.groups ?? []), group] });
+      return group;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["groups"] }),
+  });
+}
+
+export function useUpdateGroup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<Group> }) => {
+      const store = readStore();
+      const groups = (store.groups ?? []).map((g) => (g.id === id ? { ...g, ...data } : g));
+      writeStore({ ...store, groups });
+      return groups.find((g) => g.id === id)!;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["groups"] }),
+  });
+}
+
+export function useDeleteGroup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }: { id: number }) => {
+      const store = readStore();
+      writeStore({
+        ...store,
+        groups: (store.groups ?? []).filter((g) => g.id !== id),
+        groupMembers: (store.groupMembers ?? []).filter((m) => m.groupId !== id),
+        attendance: (store.attendance ?? []).filter((a) => a.groupId !== id),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["groups"] });
+      queryClient.invalidateQueries({ queryKey: ["groupMembers"] });
+      queryClient.invalidateQueries({ queryKey: ["attendance"] });
+    },
+  });
+}
+
+export function useListGroupMembers(groupId?: number) {
+  return useQuery({
+    queryKey: ["groupMembers", groupId],
+    queryFn: () => {
+      if (!groupId) return [];
+      const store = readStore();
+      const members = (store.groupMembers ?? []).filter((m) => m.groupId === groupId);
+      return members.map((m) => {
+        const athlete = store.athletes.find((a) => a.id === m.athleteId);
+        const team = athlete?.teamId ? store.teams.find((t) => t.id === athlete.teamId) : null;
+        return {
+          ...m,
+          membershipId: m.id,
+          firstName: athlete?.firstName ?? "",
+          lastName: athlete?.lastName ?? "",
+          gender: athlete?.gender ?? "",
+          dateOfBirth: athlete?.dateOfBirth ?? null,
+          teamName: team?.name ?? null,
+        };
+      });
+    },
+    staleTime: 0,
+    enabled: !!groupId,
+  });
+}
+
+export function useAddGroupMember() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ groupId, athleteId, joinedDate }: { groupId: number; athleteId: number; joinedDate?: string }) => {
+      const store = readStore();
+      const existing = (store.groupMembers ?? []).find((m) => m.groupId === groupId && m.athleteId === athleteId);
+      if (existing) return existing;
+      const member: GroupMember = { id: nextId(store.groupMembers ?? []), groupId, athleteId, joinedDate };
+      writeStore({ ...store, groupMembers: [...(store.groupMembers ?? []), member] });
+      return member;
+    },
+    onSuccess: (_r, { groupId }) => {
+      queryClient.invalidateQueries({ queryKey: ["groupMembers", groupId] });
+      queryClient.invalidateQueries({ queryKey: ["groups"] });
+    },
+  });
+}
+
+export function useRemoveGroupMember() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ groupId, athleteId }: { groupId: number; athleteId: number }) => {
+      const store = readStore();
+      writeStore({ ...store, groupMembers: (store.groupMembers ?? []).filter((m) => !(m.groupId === groupId && m.athleteId === athleteId)) });
+    },
+    onSuccess: (_r, { groupId }) => {
+      queryClient.invalidateQueries({ queryKey: ["groupMembers", groupId] });
+      queryClient.invalidateQueries({ queryKey: ["groups"] });
+    },
+  });
+}
+
+export function useListAttendance(groupId?: number, date?: string) {
+  return useQuery({
+    queryKey: ["attendance", { groupId, date }],
+    queryFn: () => {
+      if (!groupId) return [];
+      const store = readStore();
+      return (store.attendance ?? []).filter((a) => a.groupId === groupId && (!date || a.date === date));
+    },
+    staleTime: 0,
+    enabled: !!groupId,
+  });
+}
+
+export function useBulkAttendance() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ groupId, date, records }: { groupId: number; date: string; records: { athleteId: number; present: boolean }[] }) => {
+      const store = readStore();
+      let attendance = [...(store.attendance ?? [])];
+      for (const rec of records) {
+        const existing = attendance.find((a) => a.groupId === groupId && a.athleteId === rec.athleteId && a.date === date);
+        if (existing) {
+          attendance = attendance.map((a) => a === existing ? { ...a, present: rec.present } : a);
+        } else {
+          attendance.push({ id: nextId(attendance), groupId, athleteId: rec.athleteId, date, present: rec.present });
+        }
+      }
+      writeStore({ ...store, attendance });
+    },
+    onSuccess: (_r, { groupId, date }) => {
+      queryClient.invalidateQueries({ queryKey: ["attendance", { groupId, date }] });
+    },
+  });
+}
+
+// ─── Fundraising ──────────────────────────────────────────────────────────────
+
+export function useListFundraisingCampaigns() {
+  return useQuery({
+    queryKey: ["fundraisingCampaigns"],
+    queryFn: () => (readStore().fundraisingCampaigns ?? []).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    staleTime: 0,
+  });
+}
+
+export function useCreateFundraisingCampaign() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ data }: { data: Omit<FundraisingCampaign, "id" | "createdAt"> }) => {
+      const store = readStore();
+      const item: FundraisingCampaign = { ...data, id: nextId(store.fundraisingCampaigns ?? []), createdAt: now() };
+      writeStore({ ...store, fundraisingCampaigns: [...(store.fundraisingCampaigns ?? []), item] });
+      return item;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["fundraisingCampaigns"] }),
+  });
+}
+
+export function useUpdateFundraisingCampaign() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<FundraisingCampaign> }) => {
+      const store = readStore();
+      const items = (store.fundraisingCampaigns ?? []).map((c) => (c.id === id ? { ...c, ...data } : c));
+      writeStore({ ...store, fundraisingCampaigns: items });
+      return items.find((c) => c.id === id)!;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["fundraisingCampaigns"] }),
+  });
+}
+
+export function useDeleteFundraisingCampaign() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }: { id: number }) => {
+      const store = readStore();
+      writeStore({
+        ...store,
+        fundraisingCampaigns: (store.fundraisingCampaigns ?? []).filter((c) => c.id !== id),
+        fundraisingDonations: (store.fundraisingDonations ?? []).filter((d) => d.campaignId !== id),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["fundraisingCampaigns"] });
+      queryClient.invalidateQueries({ queryKey: ["fundraisingDonations"] });
+    },
+  });
+}
+
+export function useListFundraisingDonations(campaignId?: number) {
+  return useQuery({
+    queryKey: ["fundraisingDonations", campaignId],
+    queryFn: () => {
+      const donations = readStore().fundraisingDonations ?? [];
+      return campaignId ? donations.filter((d) => d.campaignId === campaignId) : donations;
+    },
+    staleTime: 0,
+  });
+}
+
+export function useCreateFundraisingDonation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ data }: { data: Omit<FundraisingDonation, "id" | "createdAt"> }) => {
+      const store = readStore();
+      const item: FundraisingDonation = { ...data, id: nextId(store.fundraisingDonations ?? []), createdAt: now() };
+      const campaigns = (store.fundraisingCampaigns ?? []).map((c) =>
+        c.id === data.campaignId ? { ...c, raised: c.raised + (data.type === "pledge" ? 0 : data.amount) } : c
+      );
+      writeStore({ ...store, fundraisingDonations: [...(store.fundraisingDonations ?? []), item], fundraisingCampaigns: campaigns });
+      return item;
+    },
+    onSuccess: (_r, { data }) => {
+      queryClient.invalidateQueries({ queryKey: ["fundraisingDonations", data.campaignId] });
+      queryClient.invalidateQueries({ queryKey: ["fundraisingCampaigns"] });
+    },
+  });
+}
+
+export function useDeleteFundraisingDonation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }: { id: number }) => {
+      const store = readStore();
+      const donation = (store.fundraisingDonations ?? []).find((d) => d.id === id);
+      const donations = (store.fundraisingDonations ?? []).filter((d) => d.id !== id);
+      const campaigns = donation
+        ? (store.fundraisingCampaigns ?? []).map((c) =>
+            c.id === donation.campaignId && donation.type !== "pledge"
+              ? { ...c, raised: Math.max(0, c.raised - donation.amount) }
+              : c
+          )
+        : store.fundraisingCampaigns ?? [];
+      writeStore({ ...store, fundraisingDonations: donations, fundraisingCampaigns: campaigns });
+      return donation;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["fundraisingDonations"] });
+      queryClient.invalidateQueries({ queryKey: ["fundraisingCampaigns"] });
+    },
+  });
+}
+
+// ─── Volunteers ───────────────────────────────────────────────────────────────
+
+export function useListVolunteers() {
+  return useQuery({
+    queryKey: ["volunteers"],
+    queryFn: () => (readStore().volunteers ?? []).sort((a, b) => a.name.localeCompare(b.name)),
+    staleTime: 0,
+  });
+}
+
+export function useCreateVolunteer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ data }: { data: Omit<Volunteer, "id" | "createdAt"> }) => {
+      const store = readStore();
+      const item: Volunteer = { ...data, id: nextId(store.volunteers ?? []), createdAt: now() };
+      writeStore({ ...store, volunteers: [...(store.volunteers ?? []), item] });
+      return item;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["volunteers"] }),
+  });
+}
+
+export function useUpdateVolunteer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<Volunteer> }) => {
+      const store = readStore();
+      const items = (store.volunteers ?? []).map((v) => (v.id === id ? { ...v, ...data } : v));
+      writeStore({ ...store, volunteers: items });
+      return items.find((v) => v.id === id)!;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["volunteers"] }),
+  });
+}
+
+export function useDeleteVolunteer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }: { id: number }) => {
+      const store = readStore();
+      writeStore({
+        ...store,
+        volunteers: (store.volunteers ?? []).filter((v) => v.id !== id),
+        volunteerShifts: (store.volunteerShifts ?? []).filter((s) => s.volunteerId !== id),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["volunteers"] });
+      queryClient.invalidateQueries({ queryKey: ["volunteerShifts"] });
+    },
+  });
+}
+
+export function useListVolunteerShifts(volunteerId?: number) {
+  return useQuery({
+    queryKey: ["volunteerShifts", volunteerId],
+    queryFn: () => {
+      const shifts = readStore().volunteerShifts ?? [];
+      return volunteerId ? shifts.filter((s) => s.volunteerId === volunteerId) : shifts;
+    },
+    staleTime: 0,
+  });
+}
+
+export function useCreateVolunteerShift() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ data }: { data: Omit<VolunteerShift, "id" | "createdAt"> }) => {
+      const store = readStore();
+      const item: VolunteerShift = { ...data, id: nextId(store.volunteerShifts ?? []), createdAt: now() };
+      writeStore({ ...store, volunteerShifts: [...(store.volunteerShifts ?? []), item] });
+      return item;
+    },
+    onSuccess: (_r, { data }) => {
+      queryClient.invalidateQueries({ queryKey: ["volunteerShifts", data.volunteerId] });
+      queryClient.invalidateQueries({ queryKey: ["volunteerShifts"] });
+    },
+  });
+}
+
+export function useUpdateVolunteerShift() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<VolunteerShift> }) => {
+      const store = readStore();
+      const items = (store.volunteerShifts ?? []).map((s) => (s.id === id ? { ...s, ...data } : s));
+      writeStore({ ...store, volunteerShifts: items });
+      return items.find((s) => s.id === id)!;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["volunteerShifts"] }),
+  });
+}
+
+export function useDeleteVolunteerShift() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }: { id: number }) => {
+      const store = readStore();
+      writeStore({ ...store, volunteerShifts: (store.volunteerShifts ?? []).filter((s) => s.id !== id) });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["volunteerShifts"] }),
+  });
 }

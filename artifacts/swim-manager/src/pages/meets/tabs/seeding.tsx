@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useListEvents, useSeedEvent, getListEventsQueryKey } from "@/lib/local-store";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -80,6 +80,20 @@ export default function MeetSeeding({ meetId }: { meetId: number }) {
 
   const seededCount = events?.filter((e) => e.status === "seeded" || e.status === "completed").length ?? 0;
 
+  // Group events by eventType for prelims/finals separation
+  const eventGroups = (() => {
+    const all = events ?? [];
+    const prelims = all.filter(e => (e.eventType ?? "").toLowerCase().includes("prelim"));
+    const finals = all.filter(e => (e.eventType ?? "").toLowerCase().includes("final"));
+    const standard = all.filter(e => !prelims.includes(e) && !finals.includes(e));
+    if (prelims.length === 0 && finals.length === 0) return [{ label: null, events: standard }];
+    const groups: { label: string | null; events: typeof all }[] = [];
+    if (prelims.length > 0) groups.push({ label: "Preliminary Events", events: prelims });
+    if (finals.length > 0) groups.push({ label: "Finals Events", events: finals });
+    if (standard.length > 0) groups.push({ label: "Timed Finals", events: standard });
+    return groups;
+  })();
+
   return (
     <>
       <Card>
@@ -130,39 +144,81 @@ export default function MeetSeeding({ meetId }: { meetId: number }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {events?.map((event) => {
-                const label = `Event ${event.eventNumber}: ${event.gender === "M" ? "Men" : event.gender === "F" ? "Women" : "Mixed"} ${event.distance} ${event.stroke}`;
-                const isSeeded = event.status === "seeded" || event.status === "completed";
-                const noEntries = (event.entryCount ?? 0) === 0;
-                return (
-                  <TableRow key={event.id}>
-                    <TableCell className="pl-6 font-medium">{label}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{event.ageGroup || "Open"}</TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant={noEntries ? "outline" : "secondary"}>{event.entryCount ?? 0}</Badge>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant="outline">{event.heatCount ?? 0}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={isSeeded ? "default" : "outline"}
-                        className={event.status === "completed" ? "bg-blue-600 text-white" : isSeeded ? "bg-green-600 text-white" : ""}>
-                        {event.status === "completed" ? "Completed" : isSeeded ? "Seeded" : "Unseeded"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right pr-6">
-                      <Button size="sm" variant={isSeeded ? "outline" : "default"}
-                        onClick={() => openSeedDialog(event.id, label)}
-                        disabled={seedEvent.isPending || noEntries}
-                        title={noEntries ? "No entries to seed" : ""}>
-                        {isSeeded
-                          ? <><RefreshCw className="h-3.5 w-3.5 mr-1" />Re-seed</>
-                          : <><Shuffle className="h-3.5 w-3.5 mr-1" />Seed</>}
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+              {eventGroups.map((group, gi) => (
+                <React.Fragment key={gi}>
+                  {group.label && (
+                    <TableRow key={`group-${gi}`} className="bg-muted/40 hover:bg-muted/40">
+                      <TableCell colSpan={6} className="pl-6 py-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{group.label}</span>
+                          <Badge variant="outline" className="text-xs">{group.events.length} events</Badge>
+                          {group.label.toLowerCase().includes("prelim") && (
+                            <Button size="sm" variant="ghost" className="h-6 text-xs ml-auto mr-2" onClick={() => {
+                              const pending = group.events.filter(e => e.status !== "seeded" && e.status !== "completed" && (e.entryCount ?? 0) > 0);
+                              if (!pending.length) return;
+                              const todo = [...pending];
+                              const seedNext = () => {
+                                const evt = todo.shift(); if (!evt) { queryClient.invalidateQueries({ queryKey: getListEventsQueryKey(meetId) }); return; }
+                                seedEvent.mutate({ eventId: evt.id, data: { lanes: parseInt(lanes), order: heatOrder, circleSeeding } }, { onSuccess: seedNext, onError: () => seedNext() });
+                              };
+                              seedNext();
+                            }}>
+                              <Shuffle className="h-3 w-3 mr-1" />Seed All Prelims
+                            </Button>
+                          )}
+                          {group.label.toLowerCase().includes("final") && (
+                            <Button size="sm" variant="ghost" className="h-6 text-xs ml-auto mr-2" onClick={() => {
+                              const pending = group.events.filter(e => e.status !== "seeded" && e.status !== "completed" && (e.entryCount ?? 0) > 0);
+                              if (!pending.length) return;
+                              const todo = [...pending];
+                              const seedNext = () => {
+                                const evt = todo.shift(); if (!evt) { queryClient.invalidateQueries({ queryKey: getListEventsQueryKey(meetId) }); return; }
+                                seedEvent.mutate({ eventId: evt.id, data: { lanes: parseInt(lanes), order: heatOrder, circleSeeding } }, { onSuccess: seedNext, onError: () => seedNext() });
+                              };
+                              seedNext();
+                            }}>
+                              <Shuffle className="h-3 w-3 mr-1" />Seed All Finals
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {group.events.map((event) => {
+                    const label = `Event ${event.eventNumber}: ${event.gender === "M" ? "Men" : event.gender === "F" ? "Women" : "Mixed"} ${event.distance} ${event.stroke}`;
+                    const isSeeded = event.status === "seeded" || event.status === "completed";
+                    const noEntries = (event.entryCount ?? 0) === 0;
+                    return (
+                      <TableRow key={event.id}>
+                        <TableCell className="pl-6 font-medium">{label}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">{event.ageGroup || "Open"}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant={noEntries ? "outline" : "secondary"}>{event.entryCount ?? 0}</Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant="outline">{event.heatCount ?? 0}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={isSeeded ? "default" : "outline"}
+                            className={event.status === "completed" ? "bg-blue-600 text-white" : isSeeded ? "bg-green-600 text-white" : ""}>
+                            {event.status === "completed" ? "Completed" : isSeeded ? "Seeded" : "Unseeded"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right pr-6">
+                          <Button size="sm" variant={isSeeded ? "outline" : "default"}
+                            onClick={() => openSeedDialog(event.id, label)}
+                            disabled={seedEvent.isPending || noEntries}
+                            title={noEntries ? "No entries to seed" : ""}>
+                            {isSeeded
+                              ? <><RefreshCw className="h-3.5 w-3.5 mr-1" />Re-seed</>
+                              : <><Shuffle className="h-3.5 w-3.5 mr-1" />Seed</>}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </React.Fragment>
+              ))}
               {(!events || events.length === 0) && (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">

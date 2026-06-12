@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Timer, WifiOff, Play, Square, RotateCcw,
-  Settings, Zap, Radio, CheckCircle2, Keyboard, Wifi
+  Settings, Zap, Radio, CheckCircle2, Keyboard, Wifi, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { subscribeToRun, getActiveRun, subscribeToSignals, broadcastDataChanged } from "@/lib/live-broadcast";
@@ -463,17 +463,52 @@ export default function TimingConsolePage() {
             </div>
             <div>
               <Label className="text-xs mb-1 block">Event</Label>
-              <Select value={selectedEvent} onValueChange={v => { setSelectedEvent(v); setSelectedHeat(null); }} disabled={!selectedMeet}>
-                <SelectTrigger><SelectValue placeholder="Select event..." /></SelectTrigger>
-                <SelectContent>{events?.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>#{e.eventNumber} — {e.distance}{e.stroke} {e.gender}</SelectItem>)}</SelectContent>
-              </Select>
+              {(() => {
+                const sortedEvents = events ? [...events].sort((a: any, b: any) => a.eventNumber - b.eventNumber) : [];
+                const evIdx = sortedEvents.findIndex((e: any) => String(e.id) === selectedEvent);
+                return (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => { if (evIdx > 0) { setSelectedEvent(String((sortedEvents[evIdx - 1] as any).id)); setSelectedHeat(null); } }}
+                      disabled={evIdx <= 0 || !selectedMeet}
+                      className="h-9 w-8 flex items-center justify-center rounded border border-input bg-background text-muted-foreground hover:bg-accent disabled:opacity-30"
+                    ><ChevronLeft className="h-4 w-4" /></button>
+                    <Select value={selectedEvent} onValueChange={v => { setSelectedEvent(v); setSelectedHeat(null); }} disabled={!selectedMeet}>
+                      <SelectTrigger className="flex-1"><SelectValue placeholder="Select event..." /></SelectTrigger>
+                      <SelectContent>{sortedEvents.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>#{e.eventNumber} — {e.distance}{e.stroke} {e.gender}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <button
+                      onClick={() => { if (evIdx < sortedEvents.length - 1) { setSelectedEvent(String((sortedEvents[evIdx + 1] as any).id)); setSelectedHeat(null); } }}
+                      disabled={evIdx < 0 || evIdx >= sortedEvents.length - 1 || !selectedMeet}
+                      className="h-9 w-8 flex items-center justify-center rounded border border-input bg-background text-muted-foreground hover:bg-accent disabled:opacity-30"
+                    ><ChevronRight className="h-4 w-4" /></button>
+                  </div>
+                );
+              })()}
             </div>
             <div>
               <Label className="text-xs mb-1 block">Heat</Label>
-              <Select value={selectedHeat !== null ? String(selectedHeat) : ""} onValueChange={v => setSelectedHeat(parseInt(v))} disabled={!selectedEvent}>
-                <SelectTrigger><SelectValue placeholder="Select heat..." /></SelectTrigger>
-                <SelectContent>{allHeats.map(h => <SelectItem key={h} value={String(h)}>Heat {h}</SelectItem>)}</SelectContent>
-              </Select>
+              {(() => {
+                const heatIdx = selectedHeat !== null ? allHeats.indexOf(selectedHeat) : -1;
+                return (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => { if (heatIdx > 0) setSelectedHeat(allHeats[heatIdx - 1]); }}
+                      disabled={heatIdx <= 0 || !selectedEvent}
+                      className="h-9 w-8 flex items-center justify-center rounded border border-input bg-background text-muted-foreground hover:bg-accent disabled:opacity-30"
+                    ><ChevronLeft className="h-4 w-4" /></button>
+                    <Select value={selectedHeat !== null ? String(selectedHeat) : ""} onValueChange={v => setSelectedHeat(parseInt(v))} disabled={!selectedEvent}>
+                      <SelectTrigger className="flex-1"><SelectValue placeholder="Select heat..." /></SelectTrigger>
+                      <SelectContent>{allHeats.map(h => <SelectItem key={h} value={String(h)}>Heat {h}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <button
+                      onClick={() => { if (heatIdx < allHeats.length - 1) setSelectedHeat(allHeats[heatIdx + 1]); }}
+                      disabled={!selectedEvent || heatIdx < 0 || heatIdx >= allHeats.length - 1}
+                      className="h-9 w-8 flex items-center justify-center rounded border border-input bg-background text-muted-foreground hover:bg-accent disabled:opacity-30"
+                    ><ChevronRight className="h-4 w-4" /></button>
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
