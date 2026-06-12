@@ -46,6 +46,7 @@ const meetSchema = z.object({
   ageUpDate: z.string().optional(),
   scoringRules: z.string().optional(),
   lanes: z.coerce.number().min(1, "Must have at least 1 lane").default(8),
+  maxIndividualEvents: z.coerce.number().min(1).optional(),
   notes: z.string().optional(),
 });
 
@@ -313,6 +314,30 @@ export default function NewMeet() {
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="maxIndividualEvents"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Max Individual Events Per Athlete</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={20}
+                        placeholder="No limit"
+                        {...field}
+                        value={field.value ?? ""}
+                        onChange={(e) => field.onChange(e.target.value === "" ? undefined : e.target.value)}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Leave blank for no limit. Enforced during entry.
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

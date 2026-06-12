@@ -25,6 +25,7 @@ export interface Meet {
   status: string;
   scoringRules?: string;
   lanes: number;
+  maxIndividualEvents?: number;
   notes?: string;
   createdAt: string;
 }

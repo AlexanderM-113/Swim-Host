@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
   User, Phone, Mail, Globe, Heart, FileText, Calendar,
-  Users, ShieldCheck, ArrowLeft, ExternalLink, Trophy
+  Users, ShieldCheck, ArrowLeft, ExternalLink, Trophy, TrendingDown, Clock
 } from "lucide-react";
 import { formatTime } from "@/lib/format-time";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 function InfoRow({ icon: Icon, label, value, href }: {
   icon: any; label: string; value?: string | null; href?: string;
@@ -37,35 +37,99 @@ function InfoRow({ icon: Icon, label, value, href }: {
   );
 }
 
+interface PbEntry {
+  event: string;
+  time: number;
+  source: string;
+  improvementSeconds: number | null;
+  totalSwims: number;
+}
+
 export default function AthleteDetail() {
   const [, params] = useRoute("/athletes/:id");
   const athleteId = params?.id ? parseInt(params.id, 10) : 0;
+  const [showHistory, setShowHistory] = useState(false);
 
   const { data: athlete, isLoading } = useGetAthlete(athleteId);
 
-  const bestTimes = useMemo(() => {
-    if (!athlete) return [];
+  const { bestTimes, history } = useMemo<{
+    bestTimes: PbEntry[];
+    history: { event: string; times: { time: number; source: string }[] }[];
+  }>(() => {
+    if (!athlete) return { bestTimes: [], history: [] };
     const store = readStore();
-    const entries = store.entries.filter((e) => e.athleteId === athlete.id);
-    const results: { event: string; time: number }[] = [];
-    for (const entry of entries) {
+
+    // Find all athlete IDs that match this person — the global ID plus any
+    // meet-scoped copies (they share the same first/last name).
+    const matchingIds = new Set(
+      store.athletes
+        .filter(
+          (a) =>
+            a.firstName.toLowerCase() === athlete.firstName.toLowerCase() &&
+            a.lastName.toLowerCase() === athlete.lastName.toLowerCase()
+        )
+        .map((a) => a.id)
+    );
+
+    // ── Meet results ─────────────────────────────────────────────────────────
+    const allRaw: { event: string; time: number; source: string }[] = [];
+
+    for (const entry of store.entries) {
+      if (!matchingIds.has(entry.athleteId)) continue;
       const evt = store.events.find((ev) => ev.id === entry.eventId);
       const result = store.results.find((r) => r.entryId === entry.id);
       if (result?.finishTime && evt && !result.dq && !result.ns && !result.dnf) {
-        results.push({
+        const meetName =
+          store.meets.find((m) => m.id === entry.meetId)?.name ?? "Meet";
+        allRaw.push({
           event: `${evt.distance} ${evt.stroke}`,
           time: result.finishTime,
+          source: meetName,
         });
       }
     }
-    const bestMap = new Map<string, number>();
-    for (const r of results) {
-      const prev = bestMap.get(r.event);
-      if (!prev || r.time < prev) bestMap.set(r.event, r.time);
+
+    // ── Time Trial results ────────────────────────────────────────────────────
+    for (const session of store.timeTrialSessions ?? []) {
+      if (!session.athleteIds.includes(athlete.id)) continue;
+      for (const res of session.results ?? []) {
+        if (res.athleteId !== athlete.id || res.dq || res.ns || !res.time) continue;
+        const ev = session.events?.[res.eventIndex];
+        if (!ev) continue;
+        allRaw.push({
+          event: `${ev.distance} ${ev.stroke}`,
+          time: res.time,
+          source: `TT: ${session.title}`,
+        });
+      }
     }
-    return Array.from(bestMap.entries())
-      .map(([event, time]) => ({ event, time }))
-      .sort((a, b) => a.event.localeCompare(b.event));
+
+    // ── Build best-per-event map ──────────────────────────────────────────────
+    const byEvent = new Map<string, { time: number; source: string }[]>();
+    for (const r of allRaw) {
+      const arr = byEvent.get(r.event) ?? [];
+      arr.push({ time: r.time, source: r.source });
+      byEvent.set(r.event, arr);
+    }
+
+    const bestTimes: PbEntry[] = [];
+    const history: { event: string; times: { time: number; source: string }[] }[] = [];
+
+    for (const [event, times] of Array.from(byEvent.entries()).sort(([a], [b]) => a.localeCompare(b))) {
+      const sorted = [...times].sort((a, b) => a.time - b.time);
+      const best = sorted[0];
+      const second = sorted[1];
+      bestTimes.push({
+        event,
+        time: best.time,
+        source: best.source,
+        improvementSeconds: second ? second.time - best.time : null,
+        totalSwims: sorted.length,
+      });
+      history.push({ event, times: sorted });
+    }
+
+    return { bestTimes, history };
   }, [athlete]);
 
   if (isLoading) return <div className="p-8 text-muted-foreground">Loading athlete details...</div>;
@@ -181,27 +245,88 @@ export default function AthleteDetail() {
           </CardContent>
         </Card>
 
-        {/* Best Times */}
+        {/* Personal Bests */}
         <Card className="md:col-span-2">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Trophy className="h-4 w-4" /> Best Times from Meet Results
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Trophy className="h-4 w-4 text-yellow-500" /> Personal Best Times
+              </CardTitle>
+              {history.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setShowHistory((v) => !v)}
+                >
+                  <Clock className="h-3.5 w-3.5 mr-1.5" />
+                  {showHistory ? "Hide History" : "Show History"}
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             {bestTimes.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No recorded results yet. Best times will appear here once meet results are entered.
+                No recorded times yet. Personal bests appear here once meet results or time trial sessions are recorded.
               </p>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                {bestTimes.map(({ event, time }) => (
-                  <div key={event} className="rounded-lg border bg-muted/30 px-3 py-2.5 text-center">
-                    <div className="text-xs text-muted-foreground mb-1">{event}</div>
-                    <div className="font-mono font-bold text-primary text-lg">{formatTime(time)}</div>
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  {bestTimes.map(({ event, time, source, improvementSeconds, totalSwims }) => (
+                    <div key={event} className="rounded-lg border bg-muted/30 px-3 py-2.5">
+                      <div className="text-xs text-muted-foreground mb-1">{event}</div>
+                      <div className="font-mono font-bold text-primary text-lg">{formatTime(time)}</div>
+                      <div className="text-xs text-muted-foreground mt-1 truncate" title={source}>{source}</div>
+                      {improvementSeconds != null && improvementSeconds > 0 && (
+                        <div className="flex items-center gap-1 mt-1">
+                          <TrendingDown className="h-3 w-3 text-green-500 shrink-0" />
+                          <span className="text-xs text-green-600 font-medium">
+                            -{formatTime(improvementSeconds)} PR
+                          </span>
+                        </div>
+                      )}
+                      {totalSwims > 1 && (
+                        <div className="text-xs text-muted-foreground/70 mt-0.5">{totalSwims} swims</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {showHistory && history.length > 0 && (
+                  <div className="mt-6 space-y-4">
+                    <Separator />
+                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      All Recorded Times
+                    </div>
+                    <div className="space-y-3">
+                      {history.map(({ event, times }) => (
+                        <div key={event}>
+                          <div className="text-sm font-medium mb-1.5">{event}</div>
+                          <div className="flex flex-wrap gap-2">
+                            {times.map((t, i) => (
+                              <div
+                                key={i}
+                                className={`rounded border px-2.5 py-1.5 text-center ${
+                                  i === 0
+                                    ? "border-yellow-500/40 bg-yellow-500/10"
+                                    : "border-border bg-muted/20"
+                                }`}
+                              >
+                                <div className="font-mono font-bold text-sm">{formatTime(t.time)}</div>
+                                <div className="text-xs text-muted-foreground truncate max-w-[120px]" title={t.source}>{t.source}</div>
+                                {i === 0 && (
+                                  <div className="text-xs font-semibold text-yellow-600 mt-0.5">PB</div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

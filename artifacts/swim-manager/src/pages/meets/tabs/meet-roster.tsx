@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   useListMeetRosterAthletes,
   useAddMeetRosterAthlete,
@@ -7,8 +7,14 @@ import {
   useListAthletes,
   useListTeams,
   useCreateTeam,
+  useGetMeet,
+  useListEvents,
+  useCreateEntry,
+  useUpdateEntry,
+  useDeleteEntry,
   readStore,
   type Athlete,
+  type Event,
 } from "@/lib/local-store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,7 +28,240 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import { Users, Building2, Plus, Trash2, UserPlus, Download, FileUp, Search } from "lucide-react";
+import { Users, Building2, Plus, Trash2, UserPlus, Download, FileUp, Search, ListChecks, AlertCircle } from "lucide-react";
+import { parseTime, formatTime } from "@/lib/format-time";
+
+// ─── Quick Entry Dialog ────────────────────────────────────────────────────────
+
+interface EventRowState {
+  checked: boolean;
+  seedTime: string;
+  entryId: number | null;
+}
+
+function AthleteQuickEntryDialog({
+  meetId,
+  athlete,
+  onClose,
+}: {
+  meetId: number;
+  athlete: Athlete;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const { data: meet } = useGetMeet(meetId);
+  const { data: events = [] } = useListEvents(meetId);
+  const createEntry = useCreateEntry();
+  const updateEntry = useUpdateEntry();
+  const deleteEntry = useDeleteEntry();
+
+  // Per-event state: keyed by eventId
+  const [rows, setRows] = useState<Record<number, EventRowState>>({});
+  const [saving, setSaving] = useState(false);
+
+  // Initialise rows from existing entries for this athlete in this meet
+  useEffect(() => {
+    if (!events.length) return;
+    const store = readStore();
+    const initial: Record<number, EventRowState> = {};
+    for (const evt of events) {
+      const existing = store.entries.find(
+        (e) => e.eventId === evt.id && e.athleteId === athlete.id && !e.scratched
+      );
+      initial[evt.id] = {
+        checked: !!existing,
+        seedTime: existing?.seedTime != null ? formatTime(existing.seedTime) : "",
+        entryId: existing?.id ?? null,
+      };
+    }
+    setRows(initial);
+  }, [events, athlete.id]);
+
+  function toggleEvent(eventId: number) {
+    setRows((prev) => {
+      const cur = prev[eventId];
+      if (!cur) return prev;
+      // Check limit before enabling
+      if (!cur.checked && meet?.maxIndividualEvents != null) {
+        const indivEvents = events.filter((e) => !e.isRelay);
+        const checkedIndiv = indivEvents.filter(
+          (e) => !e.isRelay && prev[e.id]?.checked
+        ).length;
+        if (checkedIndiv >= meet.maxIndividualEvents) {
+          toast({
+            title: "Entry limit reached",
+            description: `This meet allows at most ${meet.maxIndividualEvents} individual event${meet.maxIndividualEvents === 1 ? "" : "s"} per athlete.`,
+            variant: "destructive",
+          });
+          return prev;
+        }
+      }
+      return { ...prev, [eventId]: { ...cur, checked: !cur.checked } };
+    });
+  }
+
+  function setSeedTime(eventId: number, val: string) {
+    setRows((prev) => ({
+      ...prev,
+      [eventId]: { ...prev[eventId], seedTime: val },
+    }));
+  }
+
+  const individualCount = useMemo(() => {
+    return events.filter((e) => !e.isRelay && rows[e.id]?.checked).length;
+  }, [rows, events]);
+
+  async function save() {
+    setSaving(true);
+    try {
+      for (const evt of events) {
+        const row = rows[evt.id];
+        if (!row) continue;
+        const seedSecs = row.seedTime.trim() ? parseTime(row.seedTime.trim()) : null;
+
+        if (row.checked && row.entryId == null) {
+          // New entry
+          await createEntry.mutateAsync({
+            data: {
+              eventId: evt.id,
+              athleteId: athlete.id,
+              meetId,
+              seedTime: seedSecs ?? undefined,
+              seedCourse: meet?.course ?? "SCY",
+            },
+          });
+        } else if (row.checked && row.entryId != null) {
+          // Update seed time
+          await updateEntry.mutateAsync({
+            id: row.entryId,
+            data: { seedTime: seedSecs ?? undefined },
+          });
+        } else if (!row.checked && row.entryId != null) {
+          // Remove entry
+          await deleteEntry.mutateAsync({ id: row.entryId });
+        }
+      }
+      toast({ title: "Entries saved", description: `Updated entries for ${athlete.firstName} ${athlete.lastName}.` });
+      onClose();
+    } catch {
+      toast({ title: "Error saving entries", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const indivLimit = meet?.maxIndividualEvents;
+  const atLimit = indivLimit != null && individualCount >= indivLimit;
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ListChecks className="h-5 w-5 text-cyan-500" />
+            Enter {athlete.firstName} {athlete.lastName}
+          </DialogTitle>
+          <DialogDescription>
+            Tick the events this athlete will swim. Type a seed time (MM:SS.ss or S.ss) or leave blank for NT.
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Entry counter */}
+        {indivLimit != null && (
+          <div className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm ${atLimit ? "bg-destructive/10 text-destructive border border-destructive/20" : "bg-muted/50"}`}>
+            {atLimit && <AlertCircle className="h-4 w-4 shrink-0" />}
+            <span>
+              <span className="font-bold">{individualCount}</span> / {indivLimit} individual event{indivLimit === 1 ? "" : "s"} entered
+              {atLimit && " — limit reached"}
+            </span>
+          </div>
+        )}
+
+        {events.length === 0 ? (
+          <div className="py-8 text-center text-muted-foreground text-sm">
+            No events have been added to this meet yet. Add events in the Events tab first.
+          </div>
+        ) : (
+          <div className="overflow-y-auto flex-1 border rounded-md">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10" />
+                  <TableHead>#</TableHead>
+                  <TableHead>Event</TableHead>
+                  <TableHead>Gender</TableHead>
+                  <TableHead>Age</TableHead>
+                  <TableHead>Seed Time</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {events.map((evt) => {
+                  const row = rows[evt.id];
+                  const isRelay = (evt as any).isRelay;
+                  const wouldExceedLimit =
+                    !isRelay &&
+                    indivLimit != null &&
+                    individualCount >= indivLimit &&
+                    !row?.checked;
+                  return (
+                    <TableRow
+                      key={evt.id}
+                      className={`cursor-pointer ${row?.checked ? "bg-primary/5" : ""}`}
+                      onClick={() => !wouldExceedLimit && toggleEvent(evt.id)}
+                    >
+                      <TableCell>
+                        <Checkbox
+                          checked={row?.checked ?? false}
+                          disabled={wouldExceedLimit}
+                          onCheckedChange={() => toggleEvent(evt.id)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </TableCell>
+                      <TableCell className="font-mono text-muted-foreground">
+                        {(evt as any).eventNumber ?? evt.id}
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {(evt as any).distance} {(evt as any).stroke}
+                        {isRelay && <Badge variant="outline" className="ml-2 text-xs">Relay</Badge>}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {(evt as any).gender ?? "—"}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {(evt as any).ageGroup ?? "Open"}
+                      </TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        {row?.checked ? (
+                          <Input
+                            className="h-7 w-28 font-mono text-sm"
+                            placeholder="NT"
+                            value={row.seedTime}
+                            onChange={(e) => setSeedTime(evt.id, e.target.value)}
+                          />
+                        ) : (
+                          <span className="text-muted-foreground text-sm">—</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+
+        <DialogFooter className="pt-2">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={save} disabled={saving}>
+            {saving ? "Saving…" : "Save Entries"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Main Component ────────────────────────────────────────────────────────────
 
 export default function MeetRoster({ meetId }: { meetId: number }) {
   const { toast } = useToast();
@@ -39,6 +278,7 @@ export default function MeetRoster({ meetId }: { meetId: number }) {
   const [importOpen, setImportOpen] = useState(false);
   const [importSearch, setImportSearch] = useState("");
   const [importSelected, setImportSelected] = useState<Set<number>>(new Set());
+  const [quickEntryAthlete, setQuickEntryAthlete] = useState<Athlete | null>(null);
 
   const [newAthlete, setNewAthlete] = useState({ firstName: "", lastName: "", gender: "M", teamCode: "", dob: "" });
   const [newTeam, setNewTeam] = useState({ code: "", name: "", lsc: "" });
@@ -159,8 +399,8 @@ export default function MeetRoster({ meetId }: { meetId: number }) {
         <p className="text-sm text-muted-foreground mt-1">
           The roster is the entry pool for this hosted meet — kept separate from the global Team Manager.
           Add athletes directly, import an <Link href="/sdif" className="text-cyan-500 underline">.sd3 file</Link>,
-          or pull selected athletes in from Team Manager. Entries (with seed times) are made on the
-          <span className="font-medium"> Athletes &amp; Entries</span> tab.
+          or pull selected athletes in from Team Manager.{" "}
+          <span className="font-medium">Click an athlete's name</span> to enter them in events.
         </p>
       </div>
 
@@ -209,13 +449,28 @@ export default function MeetRoster({ meetId }: { meetId: number }) {
                 <TableBody>
                   {rosterAthletes.map((a) => (
                     <TableRow key={a.id}>
-                      <TableCell className="pl-6 font-medium">{a.lastName}, {a.firstName}</TableCell>
+                      <TableCell className="pl-6 font-medium">
+                        <button
+                          className="text-primary hover:underline font-medium text-left"
+                          onClick={() => setQuickEntryAthlete(a)}
+                        >
+                          {a.lastName}, {a.firstName}
+                        </button>
+                      </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="font-mono">{a.teamName ?? "UNAT"}</Badge>
                       </TableCell>
                       <TableCell>{a.gender}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{a.dateOfBirth || "—"}</TableCell>
-                      <TableCell className="text-center">{entryCountByAthlete.get(a.id) ?? 0}</TableCell>
+                      <TableCell className="text-center">
+                        <button
+                          className="hover:text-primary transition-colors"
+                          onClick={() => setQuickEntryAthlete(a)}
+                          title="Click to manage entries"
+                        >
+                          {entryCountByAthlete.get(a.id) ?? 0}
+                        </button>
+                      </TableCell>
                       <TableCell className="text-right pr-6">
                         <Button
                           size="sm" variant="ghost"
@@ -282,6 +537,15 @@ export default function MeetRoster({ meetId }: { meetId: number }) {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Quick Entry Dialog */}
+      {quickEntryAthlete && (
+        <AthleteQuickEntryDialog
+          meetId={meetId}
+          athlete={quickEntryAthlete}
+          onClose={() => setQuickEntryAthlete(null)}
+        />
+      )}
 
       {/* Add Athlete Dialog */}
       <Dialog open={addAthleteOpen} onOpenChange={setAddAthleteOpen}>
