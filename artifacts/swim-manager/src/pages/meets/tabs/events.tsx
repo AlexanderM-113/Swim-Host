@@ -211,7 +211,7 @@ function EventDialog({
 const TEMPLATE_PRESETS = [
   {
     name: "Standard Age Group",
-    description: "8 age groups × 7 strokes each (mixed gender)",
+    description: "Age groups × 5 strokes, girls then boys per event",
     generate: () => {
       const groups = ["8 & Under", "9-10", "11-12", "13-14", "15-16", "Senior"];
       const strokes = ["Freestyle", "Backstroke", "Breaststroke", "Butterfly", "Individual Medley"];
@@ -220,9 +220,9 @@ const TEMPLATE_PRESETS = [
       };
       const events: Partial<EventForm>[] = [];
       let num = 1;
-      for (const g of ["F", "M"]) {
-        for (const grp of groups) {
-          for (const st of strokes) {
+      for (const grp of groups) {
+        for (const st of strokes) {
+          for (const g of ["F", "M"]) {
             events.push({ eventNumber: num++, gender: g, ageGroup: grp, distance: distances[st] ?? 100, stroke: st });
           }
         }
@@ -232,16 +232,18 @@ const TEMPLATE_PRESETS = [
   },
   {
     name: "Sprint Meet",
-    description: "50m/100m in all strokes, Open age group",
+    description: "50/100 all strokes — girls then boys per event",
     generate: () => {
       const events: Partial<EventForm>[] = [];
       let num = 1;
-      for (const g of ["F", "M"]) {
-        for (const dist of [50, 100]) {
-          for (const st of ["Freestyle", "Backstroke", "Breaststroke", "Butterfly"]) {
+      for (const dist of [50, 100]) {
+        for (const st of ["Freestyle", "Backstroke", "Breaststroke", "Butterfly"]) {
+          for (const g of ["F", "M"]) {
             events.push({ eventNumber: num++, gender: g, ageGroup: "", distance: dist, stroke: st });
           }
         }
+      }
+      for (const g of ["F", "M"]) {
         events.push({ eventNumber: num++, gender: g, ageGroup: "", distance: 200, stroke: "Individual Medley" });
       }
       return events;
@@ -249,14 +251,51 @@ const TEMPLATE_PRESETS = [
   },
   {
     name: "Championship – Prelims/Finals",
-    description: "Standard dual-session championship format",
+    description: "Dual-session championship — girls then boys per event",
     generate: () => {
+      const lineup: [number, string][] = [
+        [200, "Medley Relay"], [200, "Freestyle"], [200, "Individual Medley"], [50, "Freestyle"],
+        [100, "Butterfly"], [100, "Freestyle"], [500, "Freestyle"], [200, "Freestyle Relay"],
+        [100, "Backstroke"], [100, "Breaststroke"], [400, "Freestyle Relay"],
+      ];
       const events: Partial<EventForm>[] = [];
       let num = 1;
-      for (const g of ["F", "M"]) {
-        for (const [dist, st] of [[50, "Freestyle"], [100, "Backstroke"], [100, "Breaststroke"], [100, "Butterfly"], [200, "Individual Medley"], [200, "Freestyle"], [400, "Freestyle"]] as [number, string][]) {
-          events.push({ eventNumber: num++, gender: g, ageGroup: "", distance: dist, stroke: st, eventType: "Prelims" });
-          events.push({ eventNumber: num++, gender: g, ageGroup: "", distance: dist, stroke: st, eventType: "Finals" });
+      for (const [dist, st] of lineup) {
+        for (const g of ["F", "M"]) {
+          events.push({ eventNumber: num++, gender: g, ageGroup: "", distance: dist, stroke: st, eventType: "Prelims", isRelay: st.includes("Relay") });
+        }
+      }
+      for (const [dist, st] of lineup) {
+        for (const g of ["F", "M"]) {
+          events.push({ eventNumber: num++, gender: g, ageGroup: "", distance: dist, stroke: st, eventType: "Finals", isRelay: st.includes("Relay") });
+        }
+      }
+      return events;
+    },
+  },
+  {
+    name: "High School Invitational",
+    description: "NFHS standard 12-event order, girls then boys (SCY)",
+    generate: () => {
+      const lineup: [number, string, boolean][] = [
+        [200, "Medley Relay", true],
+        [200, "Freestyle", false],
+        [200, "Individual Medley", false],
+        [50, "Freestyle", false],
+        [1, "Diving", false],
+        [100, "Butterfly", false],
+        [100, "Freestyle", false],
+        [500, "Freestyle", false],
+        [200, "Freestyle Relay", true],
+        [100, "Backstroke", false],
+        [100, "Breaststroke", false],
+        [400, "Freestyle Relay", true],
+      ];
+      const events: Partial<EventForm>[] = [];
+      let num = 1;
+      for (const [dist, st, isRelay] of lineup) {
+        for (const g of ["F", "M"]) {
+          events.push({ eventNumber: num++, gender: g, ageGroup: "", distance: dist, stroke: st, isRelay, course: "SCY" });
         }
       }
       return events;

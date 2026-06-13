@@ -491,6 +491,21 @@ const SAMPLE_WORKOUTS: Workout[] = [
     notes: "Threshold = comfortably hard. Should be able to talk in short sentences.",
     createdAt: new Date().toISOString(),
   },
+  {
+    id: 5,
+    name: "Meet Warm-Up",
+    date: new Date().toISOString().split("T")[0],
+    focus: "Race Prep",
+    sets: JSON.stringify([
+      { setOrder: 1, repetitions: 1, distance: 400, stroke: "Freestyle", description: "Easy freestyle, loosen up — no effort", restInterval: "1 min", intensity: "Easy" },
+      { setOrder: 2, repetitions: 4, distance: 50, stroke: "Individual Medley", description: "IM order (fly/back/breast/free) — drill each stroke", restInterval: "20s", intensity: "Easy" },
+      { setOrder: 3, repetitions: 2, distance: 100, stroke: "Freestyle", description: "Build to 80% — feel the pace", restInterval: "30s", intensity: "Moderate" },
+      { setOrder: 4, repetitions: 4, distance: 25, stroke: "Freestyle", description: "Race-pace explosions — 1 per event you're swimming", restInterval: "45s", intensity: "Max" },
+      { setOrder: 5, repetitions: 1, distance: 200, stroke: "Backstroke", description: "Easy back — active recovery, shake it out", restInterval: "Open", intensity: "Easy" },
+    ]),
+    notes: "Arrive 45-60 min before first event. This warm-up is 1,200 yards total. Adjust race-pace reps to match events entered. Stay loose between events with 100-200 easy swim.",
+    createdAt: new Date().toISOString(),
+  },
 ];
 
 const DEFAULT_STORE: AppStore = {

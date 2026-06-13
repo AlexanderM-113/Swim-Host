@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useListWorkouts } from "@/lib/local-store";
 import { Link } from "wouter";
-import { Plus, Search, Dumbbell, Waves, ClipboardList } from "lucide-react";
+import { Plus, Search, Dumbbell, Waves, ClipboardList, Zap, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -10,6 +10,8 @@ import {
 } from "@/components/ui/table";
 import { format } from "date-fns";
 import DryLandProgram from "./dryland";
+import SprintPowerProgram from "./dryland2";
+import InSeasonMaintenanceProgram from "./dryland3";
 import TimeTrialsManager from "./time-trials";
 
 function SwimWorkouts() {
@@ -95,6 +97,41 @@ function SwimWorkouts() {
   );
 }
 
+function DryLandHub() {
+  return (
+    <div className="space-y-4">
+      <Tabs defaultValue="foundation">
+        <TabsList className="w-full justify-start overflow-x-auto">
+          <TabsTrigger value="foundation">
+            <Dumbbell className="h-3.5 w-3.5 mr-1.5" />
+            Foundation Program
+          </TabsTrigger>
+          <TabsTrigger value="sprint">
+            <Zap className="h-3.5 w-3.5 mr-1.5" />
+            Sprint Power
+          </TabsTrigger>
+          <TabsTrigger value="inseason">
+            <Activity className="h-3.5 w-3.5 mr-1.5" />
+            In-Season Maintenance
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="foundation" className="mt-4">
+          <DryLandProgram />
+        </TabsContent>
+
+        <TabsContent value="sprint" className="mt-4">
+          <SprintPowerProgram />
+        </TabsContent>
+
+        <TabsContent value="inseason" className="mt-4">
+          <InSeasonMaintenanceProgram />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
 export default function Workouts() {
   return (
     <div className="space-y-6">
@@ -111,7 +148,7 @@ export default function Workouts() {
           </TabsTrigger>
           <TabsTrigger value="dryland">
             <Dumbbell className="h-4 w-4 mr-1.5" />
-            Dry Land Program
+            Dry Land Programs
           </TabsTrigger>
           <TabsTrigger value="timetrials">
             <ClipboardList className="h-4 w-4 mr-1.5" />
@@ -124,7 +161,7 @@ export default function Workouts() {
         </TabsContent>
 
         <TabsContent value="dryland" className="mt-4">
-          <DryLandProgram />
+          <DryLandHub />
         </TabsContent>
 
         <TabsContent value="timetrials" className="mt-4">

@@ -1,5 +1,5 @@
 import { useModule, type AppModule } from "@/contexts/module-context";
-import { Trophy, Users, Dumbbell, Waves, ChevronRight } from "lucide-react";
+import { Trophy, Users, Dumbbell, Waves, ChevronRight, Droplets } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface ModuleCard {
@@ -61,6 +61,22 @@ const MODULES: ModuleCard[] = [
       "Season planning",
     ],
   },
+  {
+    id: "diving",
+    title: "Diving Manager",
+    subtitle: "Score & manage diving events",
+    description: "Full diving meet management with DD tables and live scoring.",
+    icon: Droplets,
+    accent: "from-sky-600 to-cyan-400",
+    features: [
+      "Create diving meets",
+      "Diver roster & categories",
+      "Dive entry with DD lookup",
+      "Judge score entry",
+      "Live standings & reports",
+      "1m / 3m / Platform events",
+    ],
+  },
 ];
 
 export function LaunchModal() {
@@ -82,7 +98,7 @@ export function LaunchModal() {
           <p className="text-slate-500 mt-2 text-sm">Choose your module to get started — you can switch anytime from the sidebar.</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
           {MODULES.map((mod) => (
             <button
               key={mod.id}

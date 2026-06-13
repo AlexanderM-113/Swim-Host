@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 
-export type AppModule = "meet" | "team" | "workout" | null;
+export type AppModule = "meet" | "team" | "workout" | "diving" | null;
 
 interface ModuleContextValue {
   activeModule: AppModule;

@@ -51,7 +51,7 @@ export default function GroupsPage() {
   const { data: teams = [] } = useListTeams();
   const { data: groups = [], isLoading } = useListGroups();
   const { data: members = [] } = useListGroupMembers(activeGroup?.id);
-  const { data: attendanceData = [] } = useListAttendance(activeGroup?.id, attendanceDate);
+  const { data: attendanceData } = useListAttendance(activeGroup?.id, attendanceDate);
 
   const createGroup = useCreateGroup();
   const updateGroup = useUpdateGroup();
@@ -61,8 +61,9 @@ export default function GroupsPage() {
   const bulkAttendance = useBulkAttendance();
 
   useEffect(() => {
+    const data = attendanceData ?? [];
     const map: Record<number, boolean> = {};
-    attendanceData.forEach((r: any) => { map[r.athleteId] = r.present; });
+    data.forEach((r: any) => { map[r.athleteId] = r.present; });
     setAttendanceMap(map);
   }, [attendanceData, attendanceDate, activeGroup?.id]);
 

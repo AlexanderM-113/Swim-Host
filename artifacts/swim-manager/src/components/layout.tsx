@@ -36,14 +36,15 @@ const ALL_NAV: NavItem[] = [
 ];
 
 const MODULE_NAV: Record<string, string[]> = {
-  meet: ["/", "/meets", "/timing", "/reports", "/sdif", "/scoreboard", "/analytics", "/diving", "/volunteers", "/settings"],
+  meet: ["/", "/meets", "/timing", "/reports", "/sdif", "/scoreboard", "/analytics", "/volunteers", "/settings"],
   team: ["/", "/athletes", "/teams", "/groups", "/records", "/time-standards", "/billing", "/billing/payment-plans", "/reports", "/analytics", "/fundraising", "/volunteers", "/settings"],
   workout: ["/", "/workouts", "/athletes", "/groups", "/analytics", "/settings"],
+  diving: ["/", "/diving", "/reports", "/settings"],
 };
 
 const MODULE_SECTIONS: Record<string, { label: string; hrefs: string[] }[]> = {
   meet: [
-    { label: "Meet Management", hrefs: ["/meets", "/timing", "/diving"] },
+    { label: "Meet Management", hrefs: ["/meets", "/timing"] },
     { label: "Tools", hrefs: ["/reports", "/sdif", "/scoreboard"] },
     { label: "Smart Features", hrefs: ["/analytics"] },
     { label: "Club Ops", hrefs: ["/volunteers"] },
@@ -63,18 +64,25 @@ const MODULE_SECTIONS: Record<string, { label: string; hrefs: string[] }[]> = {
     { label: "Smart Features", hrefs: ["/analytics"] },
     { label: "System", hrefs: ["/settings"] },
   ],
+  diving: [
+    { label: "Diving", hrefs: ["/diving"] },
+    { label: "Tools", hrefs: ["/reports"] },
+    { label: "System", hrefs: ["/settings"] },
+  ],
 };
 
 const MODULE_ACCENT: Record<string, string> = {
   meet: "text-cyan-400",
   team: "text-indigo-400",
   workout: "text-teal-400",
+  diving: "text-sky-400",
 };
 
 const MODULE_LABEL: Record<string, string> = {
   meet: "Meet Manager",
   team: "Team Manager",
   workout: "Workout Manager",
+  diving: "Diving Manager",
 };
 
 function useIsMobile() {
