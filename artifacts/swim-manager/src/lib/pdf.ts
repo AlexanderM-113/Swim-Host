@@ -6,6 +6,15 @@ const POOL_LIGHT = [26, 106, 156] as [number, number, number];
 const POOL_STRIPE = [224, 240, 252] as [number, number, number];
 const WHITE = [255, 255, 255] as [number, number, number];
 
+// ── 2-column layout geometry (portrait letter 612×792 pt) ─────────────────────
+const C1_L = 14;   // col-1 margin.left
+const C1_R = 310;  // col-1 margin.right  (14 + 288 + 8 gap = 310)
+const C2_L = 310;  // col-2 margin.left
+const C2_R = 14;   // col-2 margin.right
+const COL_W = 288; // each column usable width
+const HDR_Y = 58;  // content top (below page header)
+const PAGE_H = 756; // conservative usable bottom before footer
+
 export function fmtTime(seconds: number | null | undefined): string {
   if (seconds == null) return "NT";
   if (seconds < 60) return seconds.toFixed(2);
@@ -87,12 +96,50 @@ function eventBanner(doc: jsPDF, text: string, y: number): number {
   return y + 14;
 }
 
+function eventBannerCol(doc: jsPDF, text: string, y: number, colX: number): number {
+  doc.setFillColor(...POOL_LIGHT);
+  doc.setTextColor(...WHITE);
+  doc.rect(colX, y, COL_W, 13, "F");
+  doc.setFontSize(7.5);
+  doc.setFont("helvetica", "bold");
+  doc.text(text, colX + 4, y + 9, { maxWidth: COL_W - 8 });
+  doc.setTextColor(0, 0, 0);
+  doc.setFont("helvetica", "normal");
+  return y + 13;
+}
+
+type ColState = { leftY: number; rightY: number; right: boolean };
+
+function initCols(): ColState { return { leftY: HDR_Y, rightY: HDR_Y, right: false }; }
+function colX(s: ColState) { return s.right ? C2_L : C1_L; }
+function colMR(s: ColState) { return s.right ? C2_R : C1_R; }
+function colY(s: ColState) { return s.right ? s.rightY : s.leftY; }
+
+function advanceCol(
+  s: ColState, newY: number, spilled: boolean,
+  doc: jsPDF, title: string, sub: string,
+): ColState {
+  if (spilled) {
+    return { leftY: newY, rightY: HDR_Y, right: false };
+  }
+  if (s.right) {
+    const nextLeft = Math.max(s.leftY, newY);
+    if (nextLeft + 80 > PAGE_H) {
+      doc.addPage(); pageHeader(doc, title, sub); pageFooter(doc);
+      return { leftY: HDR_Y, rightY: HDR_Y, right: false };
+    }
+    return { leftY: nextLeft, rightY: newY, right: false };
+  } else {
+    return { ...s, leftY: newY, right: true };
+  }
+}
+
 function startDoc(title: string) {
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "letter" });
   return doc;
 }
 
-// ─── PSYCH SHEET ──────────────────────────────────────────────────────────────
+// ─── PSYCH SHEET (2-column) ────────────────────────────────────────────────────
 export function generatePsychSheet(data: { meet: any; events: any[] }) {
   const doc = startDoc("Psych Sheet");
   const title = "Psych Sheet";
@@ -101,41 +148,51 @@ export function generatePsychSheet(data: { meet: any; events: any[] }) {
   pageHeader(doc, title, meetName);
   pageFooter(doc);
 
-  let y = 58;
+  let cs = initCols();
+
   for (const event of data.events) {
     if (!event.entries || event.entries.length === 0) continue;
-    if (y > 680) { doc.addPage(); y = 58; }
-    y = eventBanner(doc, `Event ${event.eventNumber} — ${fmtGender(event.gender)} ${event.ageGroup || "Open"} ${event.distance} ${event.stroke} (${event.eventType || "Standard"})`, y);
 
-    const head = [["#", "Athlete", "Team", "Age", "Seed Time", "Course"]];
+    let y = colY(cs);
+    const cl = colX(cs);
+    const cr = colMR(cs);
+
+    if (y + 80 > PAGE_H) {
+      if (!cs.right && cs.rightY + 80 <= PAGE_H) {
+        cs = { ...cs, right: true };
+        y = cs.rightY;
+      } else {
+        doc.addPage(); pageHeader(doc, title, meetName); pageFooter(doc);
+        cs = initCols(); y = HDR_Y;
+      }
+    }
+
+    y = eventBannerCol(doc, `Evt ${event.eventNumber} — ${fmtGender(event.gender)} ${event.ageGroup || "Open"} ${event.distance} ${event.stroke}`, y, colX(cs));
+
+    const head = [["#", "Athlete", "Team", "Age", "Seed", "Crs"]];
     const body = event.entries.map((e: any) => [
-      e.rank,
-      e.athleteName,
-      e.teamAbbreviation ?? "-",
-      e.age ?? "-",
-      fmtTime(e.seedTime),
-      e.seedCourse ?? "-",
+      e.rank, e.athleteName, e.teamAbbreviation ?? "-", e.age ?? "-", fmtTime(e.seedTime), e.seedCourse ?? "-",
     ]);
 
+    const pagesBefore = doc.getNumberOfPages();
     autoTable(doc, {
-      head, body,
-      startY: y,
+      head, body, startY: y,
       theme: "grid",
-      headStyles: { fillColor: POOL_BLUE, textColor: WHITE, fontStyle: "bold", fontSize: 8, cellPadding: 2.5 },
-      bodyStyles: { fontSize: 7.5, cellPadding: 2 },
+      headStyles: { fillColor: POOL_BLUE, textColor: WHITE, fontStyle: "bold", fontSize: 7.5, cellPadding: 2 },
+      bodyStyles: { fontSize: 7, cellPadding: 1.8 },
       alternateRowStyles: { fillColor: POOL_STRIPE },
-      margin: { top: 55, left: 14, right: 14, bottom: 22 },
-      columnStyles: { 0: { cellWidth: 28 }, 3: { cellWidth: 28 }, 4: { cellWidth: 58 }, 5: { cellWidth: 38 } },
+      margin: { top: HDR_Y, left: colX(cs), right: colMR(cs), bottom: 22 },
+      columnStyles: { 0: { cellWidth: 20 }, 2: { cellWidth: 34 }, 3: { cellWidth: 22 }, 4: { cellWidth: 44 }, 5: { cellWidth: 24 } },
       didDrawPage: () => { pageHeader(doc, title, meetName); pageFooter(doc); },
     });
 
-    y = (doc as any).lastAutoTable.finalY + 10;
+    cs = advanceCol(cs, (doc as any).lastAutoTable.finalY + 8, doc.getNumberOfPages() > pagesBefore, doc, title, meetName);
   }
 
   doc.save(`psych-sheet-${data.meet.name.replace(/\s+/g, "-")}.pdf`);
 }
 
-// ─── HEAT SHEET ───────────────────────────────────────────────────────────────
+// ─── HEAT SHEET (2-column) ─────────────────────────────────────────────────────
 export function generateHeatSheet(data: { meet: any; events: any[] }) {
   const doc = startDoc("Heat Sheet");
   const title = "Heat Sheet";
@@ -144,53 +201,71 @@ export function generateHeatSheet(data: { meet: any; events: any[] }) {
   pageHeader(doc, title, meetName);
   pageFooter(doc);
 
-  let y = 58;
+  let cs = initCols();
+
   for (const event of data.events) {
     if (!event.heats || event.heats.length === 0) continue;
-    if (y > 680) { doc.addPage(); y = 58; }
-    y = eventBanner(doc, `Event ${event.eventNumber} — ${fmtGender(event.gender)} ${event.ageGroup || "Open"} ${event.distance} ${event.stroke} — ${event.heats.length} Heat(s)`, y);
+
+    if (colY(cs) + 80 > PAGE_H) {
+      if (!cs.right && cs.rightY + 80 <= PAGE_H) {
+        cs = { ...cs, right: true };
+      } else {
+        doc.addPage(); pageHeader(doc, title, meetName); pageFooter(doc);
+        cs = initCols();
+      }
+    }
+
+    let y = colY(cs);
+    const cl = colX(cs);
+    y = eventBannerCol(doc, `Evt ${event.eventNumber} — ${fmtGender(event.gender)} ${event.ageGroup || "Open"} ${event.distance} ${event.stroke} (${event.heats.length} Heat${event.heats.length !== 1 ? "s" : ""})`, y, cl);
 
     for (const heat of event.heats) {
-      if (y > 650) { doc.addPage(); y = 58; }
-      doc.setFontSize(8.5);
-      doc.setFont("helvetica", "bold");
-      doc.setFillColor(240, 240, 240);
-      doc.rect(14, y, doc.internal.pageSize.getWidth() - 28, 12, "F");
-      doc.text(`Heat ${heat.heatNumber}`, 18, y + 9);
-      doc.setFont("helvetica", "normal");
-      y += 12;
+      if (y + 50 > PAGE_H) {
+        doc.addPage(); pageHeader(doc, title, meetName); pageFooter(doc);
+        cs = initCols();
+        y = HDR_Y;
+      }
 
-      const head = [["Lane", "Athlete", "Team", "Age", "Seed Time", "Course", "Finish Time"]];
+      doc.setFontSize(7.5);
+      doc.setFont("helvetica", "bold");
+      doc.setFillColor(235, 235, 235);
+      doc.rect(colX(cs), y, COL_W, 11, "F");
+      doc.text(`Heat ${heat.heatNumber}`, colX(cs) + 4, y + 8);
+      doc.setFont("helvetica", "normal");
+      y += 11;
+
+      const head = [["Ln", "Athlete", "Team", "Age", "Seed", "Finish"]];
       const body = heat.lanes.map((l: any) => [
-        l.lane ?? "-",
-        l.athleteName,
-        l.teamAbbreviation ?? "-",
-        l.age ?? "-",
-        fmtTime(l.seedTime),
-        l.seedCourse ?? "-",
-        "",
+        l.lane ?? "-", l.athleteName, l.teamAbbreviation ?? "-",
+        l.age ?? "-", fmtTime(l.seedTime), "",
       ]);
 
+      const pagesBefore = doc.getNumberOfPages();
       autoTable(doc, {
-        head, body,
-        startY: y,
+        head, body, startY: y,
         theme: "grid",
-        headStyles: { fillColor: POOL_BLUE, textColor: WHITE, fontStyle: "bold", fontSize: 7.5, cellPadding: 2 },
-        bodyStyles: { fontSize: 7.5, cellPadding: 2 },
+        headStyles: { fillColor: POOL_BLUE, textColor: WHITE, fontStyle: "bold", fontSize: 7, cellPadding: 1.8 },
+        bodyStyles: { fontSize: 7, cellPadding: 1.8 },
         alternateRowStyles: { fillColor: POOL_STRIPE },
-        margin: { top: 55, left: 14, right: 14, bottom: 22 },
-        columnStyles: { 0: { cellWidth: 32 }, 3: { cellWidth: 28 }, 4: { cellWidth: 54 }, 5: { cellWidth: 38 }, 6: { cellWidth: 60 } },
+        margin: { top: HDR_Y, left: colX(cs), right: colMR(cs), bottom: 22 },
+        columnStyles: { 0: { cellWidth: 22 }, 2: { cellWidth: 34 }, 3: { cellWidth: 22 }, 4: { cellWidth: 42 }, 5: { cellWidth: 50 } },
         didDrawPage: () => { pageHeader(doc, title, meetName); pageFooter(doc); },
       });
+
+      if (doc.getNumberOfPages() > pagesBefore) {
+        cs = initCols();
+        cs = { ...cs, leftY: (doc as any).lastAutoTable.finalY + 6 };
+      }
       y = (doc as any).lastAutoTable.finalY + 6;
     }
-    y += 6;
+
+    cs = advanceCol(cs, y + 6, false, doc, title, meetName);
   }
 
   doc.save(`heat-sheet-${data.meet.name.replace(/\s+/g, "-")}.pdf`);
 }
 
-// ─── RESULTS REPORT ───────────────────────────────────────────────────────────
+// ─── RESULTS REPORT (2-column) ────────────────────────────────────────────────
 export function generateResults(data: { meet: any; events: any[] }) {
   const doc = startDoc("Results");
   const title = "Official Results";
@@ -199,18 +274,28 @@ export function generateResults(data: { meet: any; events: any[] }) {
   pageHeader(doc, title, meetName);
   pageFooter(doc);
 
-  let y = 58;
+  let cs = initCols();
+
   for (const event of data.events) {
     if (!event.results || event.results.length === 0) continue;
-    if (y > 680) { doc.addPage(); y = 58; }
-    const roundSuffix = event.roundLabel ? ` — ${event.roundLabel}` : "";
-    y = eventBanner(doc, `Event ${event.eventNumber} — ${fmtGender(event.gender)} ${event.ageGroup || "Open"} ${event.distance} ${event.stroke}${roundSuffix}`, y);
 
-    // Show a Prelim column only on finals blocks where prelim times are present.
+    if (colY(cs) + 80 > PAGE_H) {
+      if (!cs.right && cs.rightY + 80 <= PAGE_H) {
+        cs = { ...cs, right: true };
+      } else {
+        doc.addPage(); pageHeader(doc, title, meetName); pageFooter(doc);
+        cs = initCols();
+      }
+    }
+
+    let y = colY(cs);
+    const roundSuffix = event.roundLabel ? ` — ${event.roundLabel}` : "";
+    y = eventBannerCol(doc, `Evt ${event.eventNumber} — ${fmtGender(event.gender)} ${event.ageGroup || "Open"} ${event.distance} ${event.stroke}${roundSuffix}`, y, colX(cs));
+
     const showPrelim = event.results.some((r: any) => r.prelimTime != null);
     const head = showPrelim
-      ? [["Place", "Athlete", "Team", "Age", "Seed Time", "Prelim", "Finals Time", "Points", "Notes"]]
-      : [["Place", "Athlete", "Team", "Age", "Seed Time", "Finish Time", "Points", "Notes"]];
+      ? [["Pl", "Athlete", "Team", "Seed", "Prelim", "Finals", "Pts", "Note"]]
+      : [["Pl", "Athlete", "Team", "Age", "Seed", "Finish", "Pts", "Note"]];
     const body = event.results.map((r: any) => {
       const base = [
         r.dq ? "DQ" : r.ns ? "NS" : r.dnf ? "DNF" : r.place ?? "-",
@@ -221,26 +306,26 @@ export function generateResults(data: { meet: any; events: any[] }) {
       ];
       const tail = [
         r.points != null ? r.points.toFixed(1) : "-",
-        r.dq ? (r.dqCode ?? "DQ") : r.ns ? "No Show" : r.dnf ? "Did Not Finish" : "",
+        r.dq ? (r.dqCode ?? "DQ") : r.ns ? "No Show" : r.dnf ? "DNF" : "",
       ];
       return showPrelim
         ? [...base, fmtTime(r.prelimTime), fmtTime(r.finishTime), ...tail]
         : [...base, fmtTime(r.finishTime), ...tail];
     });
 
+    const pagesBefore = doc.getNumberOfPages();
     autoTable(doc, {
-      head, body,
-      startY: y,
+      head, body, startY: y,
       theme: "grid",
-      headStyles: { fillColor: POOL_BLUE, textColor: WHITE, fontStyle: "bold", fontSize: 8, cellPadding: 2.5 },
-      bodyStyles: { fontSize: 7.5, cellPadding: 2 },
+      headStyles: { fillColor: POOL_BLUE, textColor: WHITE, fontStyle: "bold", fontSize: 7.5, cellPadding: 2 },
+      bodyStyles: { fontSize: 7, cellPadding: 1.8 },
       alternateRowStyles: { fillColor: POOL_STRIPE },
-      margin: { top: 55, left: 14, right: 14, bottom: 22 },
-      columnStyles: { 0: { cellWidth: 36 }, 3: { cellWidth: 28 }, 4: { cellWidth: 54 } },
+      margin: { top: HDR_Y, left: colX(cs), right: colMR(cs), bottom: 22 },
+      columnStyles: { 0: { cellWidth: 22 }, 2: { cellWidth: 32 }, 3: { cellWidth: 20 }, 4: { cellWidth: 40 }, 5: { cellWidth: 40 } },
       didDrawPage: () => { pageHeader(doc, title, meetName); pageFooter(doc); },
     });
 
-    y = (doc as any).lastAutoTable.finalY + 10;
+    cs = advanceCol(cs, (doc as any).lastAutoTable.finalY + 10, doc.getNumberOfPages() > pagesBefore, doc, title, meetName);
   }
 
   doc.save(`results-${data.meet.name.replace(/\s+/g, "-")}.pdf`);
