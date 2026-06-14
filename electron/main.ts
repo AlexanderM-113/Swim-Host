@@ -44,9 +44,9 @@ function loadClubConfig(): Record<string, unknown> | null {
 }
 
 function preloadPath(): string {
-  return isDev
-    ? path.join(__dirname, "preload.js")
-    : path.join(__dirname, "../preload.js");
+  // preload.js is compiled next to main.js (electron/dist/) in both dev and
+  // packaged builds, so it's always resolved relative to __dirname.
+  return path.join(__dirname, "preload.js");
 }
 
 // ── API server ────────────────────────────────────────────────────────────────
