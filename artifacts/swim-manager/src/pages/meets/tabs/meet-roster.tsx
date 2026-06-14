@@ -81,8 +81,9 @@ function AthleteQuickEntryDialog({
     setRows((prev) => {
       const cur = prev[eventId];
       if (!cur) return prev;
-      // Check limit before enabling
-      if (!cur.checked && meet?.maxIndividualEvents != null) {
+      // Check limit before enabling — relays are exempt from the individual cap.
+      const isRelay = events.find((e) => e.id === eventId)?.isRelay;
+      if (!cur.checked && !isRelay && meet?.maxIndividualEvents != null) {
         const indivEvents = events.filter((e) => !e.isRelay);
         const checkedIndiv = indivEvents.filter(
           (e) => !e.isRelay && prev[e.id]?.checked

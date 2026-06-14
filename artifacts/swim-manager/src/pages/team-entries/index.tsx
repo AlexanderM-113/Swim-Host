@@ -79,7 +79,8 @@ function AthleteEntryDialog({
     setRows((prev) => {
       const cur = prev[eventId];
       if (!cur) return prev;
-      if (!cur.checked && indivLimit != null) {
+      const isRelay = events.find((e) => e.id === eventId)?.isRelay;
+      if (!cur.checked && !isRelay && indivLimit != null) {
         const checkedIndiv = events.filter((e) => !e.isRelay && prev[e.id]?.checked).length;
         if (checkedIndiv >= indivLimit) {
           toast({
