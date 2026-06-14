@@ -17,7 +17,7 @@
   },
   "private": true,
   "devDependencies": {
-    "electron": "^35.0.0",
+    "electron": "^39.8.5",
     "electron-builder": "^25.1.8",
     "prettier": "^3.8.3",
     "typescript": "~5.9.3"
