@@ -68,6 +68,9 @@ function startApiServer(): void {
 
   const env: NodeJS.ProcessEnv = {
     ...process.env,
+    // Run the Electron binary as plain Node so it executes the API bundle
+    // instead of launching a second Electron app instance.
+    ELECTRON_RUN_AS_NODE: "1",
     NODE_ENV:    "production",
     PORT:        "8080",
     SQLITE_PATH: sqlitePath,
