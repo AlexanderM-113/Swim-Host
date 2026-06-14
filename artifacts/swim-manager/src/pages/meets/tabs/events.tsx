@@ -456,9 +456,9 @@ export default function MeetEvents({ meetId }: { meetId: number }) {
 
   function addDays(iso: string | undefined, days: number): string | undefined {
     if (!iso) return undefined;
-    const d = new Date(iso + "T00:00:00");
+    const d = new Date(iso + "T00:00:00Z");
     if (Number.isNaN(d.getTime())) return undefined;
-    d.setDate(d.getDate() + days);
+    d.setUTCDate(d.getUTCDate() + days);
     return d.toISOString().slice(0, 10);
   }
 
