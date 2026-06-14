@@ -4,7 +4,7 @@ import {
   Activity, Users, MapPin, Settings, ReceiptText, Trophy,
   FileText, Globe, Monitor, ArrowLeftRight, Timer, Star, Layers,
   Dumbbell, Waves, LayoutGrid, Sparkles, ChevronLeft, ChevronRight, Menu, X,
-  HandCoins, UserCheck, Droplets,
+  HandCoins, UserCheck, Droplets, ListChecks,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useModule } from "@/contexts/module-context";
@@ -17,6 +17,7 @@ const ALL_NAV: NavItem[] = [
   { name: "Meet Manager", href: "/meets", icon: Trophy },
   { name: "Timing Console", href: "/timing", icon: Timer },
   { name: "Athletes", href: "/athletes", icon: Users },
+  { name: "Meet Entries", href: "/meet-entries", icon: ListChecks },
   { name: "Teams", href: "/teams", icon: MapPin },
   { name: "Training Groups", href: "/groups", icon: Layers },
   { name: "Club Records", href: "/records", icon: Star },
@@ -37,7 +38,7 @@ const ALL_NAV: NavItem[] = [
 
 const MODULE_NAV: Record<string, string[]> = {
   meet: ["/", "/meets", "/timing", "/reports", "/sdif", "/scoreboard", "/analytics", "/volunteers", "/settings"],
-  team: ["/", "/athletes", "/teams", "/groups", "/records", "/time-standards", "/billing", "/billing/payment-plans", "/reports", "/analytics", "/fundraising", "/volunteers", "/settings"],
+  team: ["/", "/athletes", "/meet-entries", "/teams", "/groups", "/records", "/time-standards", "/billing", "/billing/payment-plans", "/reports", "/analytics", "/fundraising", "/volunteers", "/settings"],
   workout: ["/", "/workouts", "/athletes", "/groups", "/analytics", "/settings"],
   diving: ["/", "/diving", "/reports", "/settings"],
 };
@@ -51,7 +52,7 @@ const MODULE_SECTIONS: Record<string, { label: string; hrefs: string[] }[]> = {
     { label: "System", hrefs: ["/settings"] },
   ],
   team: [
-    { label: "Roster", hrefs: ["/athletes", "/teams", "/groups"] },
+    { label: "Roster", hrefs: ["/athletes", "/meet-entries", "/teams", "/groups"] },
     { label: "Records & Finance", hrefs: ["/records", "/time-standards", "/billing", "/billing/payment-plans"] },
     { label: "Tools", hrefs: ["/reports"] },
     { label: "Smart Features", hrefs: ["/analytics"] },
