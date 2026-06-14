@@ -47,6 +47,7 @@ import TechniqueAnalytics from "@/pages/analytics/technique";
 import FundraisingPage from "@/pages/fundraising";
 import VolunteersPage from "@/pages/volunteers";
 import DivingPage from "@/pages/diving";
+import TeamEntries from "@/pages/team-entries";
 
 // Query/mutation failures are logged and surfaced as a single de-duplicated
 // toast instead of bubbling up as raw unhandled rejections.
@@ -132,6 +133,7 @@ function AppShell() {
         <Route path="/billing" component={Billing} />
 
         <Route path="/reports" component={Reports} />
+        <Route path="/meet-entries" component={TeamEntries} />
         <Route path="/sdif" component={SDIFPage} />
         <Route path="/webgen" component={WebGen} />
 
