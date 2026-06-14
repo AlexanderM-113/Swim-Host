@@ -3,3 +3,4 @@
 - [API server typecheck caveat](api-server-typecheck.md) — api-server tsc typecheck always fails (lib/db dist not built); runtime is fine via esbuild; only frontend typecheck matters
 - [groups/index.tsx import fix](groups-import-fix.md) — groups page originally imported useListAthletes/useListTeams from @workspace/api-client-react (wrong); must use @/lib/local-store
 - [backup CORS proxy](backup-cors-proxy.md) — browser→webhook.site direct fetch fails CORS; fix is POST /api/backup/push on Express which forwards server-side
+- [Electron packaging](electron-packaging.md) — full Electron wrapper in electron/; EULA in NSIS installer + in-app activation window; license key HMAC-SHA256; SQLite migration blocked by pgTable schema constraint

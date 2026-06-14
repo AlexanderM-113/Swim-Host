@@ -1,0 +1,8 @@
+{
+  "_comment": "Copy this file to %APPDATA%/SwimManagerPro/club-config.json and fill in your values.",
+  "clubName": "My Swim Club",
+  "clubCode": "MYSC",
+  "licenseKey": "SMP-<your-license-key>",
+  "apiHost": "localhost",
+  "liveRelayUrl": ""
+}

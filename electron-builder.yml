@@ -1,0 +1,80 @@
+appId: com.sunrayllc.swimmanagerpro
+productName: Swim Manager Pro
+copyright: Copyright © 2026 Sun Ray LLC. All rights reserved.
+
+# ── Build output ──────────────────────────────────────────────────────────────
+directories:
+  output: dist/installers
+  buildResources: build-resources
+
+# ── Electron main entry (compiled from electron/main.ts) ─────────────────────
+main: electron/dist/main.js
+
+# ── Files packed into the app asar ───────────────────────────────────────────
+files:
+  - "electron/dist/**"
+  - "electron/activate.html"
+  - "!electron/dist/*.d.ts"
+  - "!electron/dist/*.map"
+
+# ── Extra resources bundled alongside the asar ───────────────────────────────
+#    Electron main reads these via process.resourcesPath
+extraResources:
+  - from: "artifacts/api-server/dist"
+    to: "api"
+    filter:
+      - "**/*"
+  - from: "artifacts/swim-manager/dist/public"
+    to: "public"
+    filter:
+      - "**/*"
+
+# ── Windows build ─────────────────────────────────────────────────────────────
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  # Place a 256×256 ICO file at build-resources/icon.ico before packaging
+  icon: build-resources/icon.ico
+  artifactName: SwimManagerPro-Setup-${version}.${ext}
+
+# ── NSIS installer (Windows .exe) ─────────────────────────────────────────────
+nsis:
+  # Show the full EULA — user must click "I Agree" to proceed with install
+  licenseFile: electron/eula.txt
+
+  oneClick: false                 # Show step-by-step wizard
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Swim Manager Pro
+
+  # Installer branding
+  installerHeaderIcon: build-resources/icon.ico
+  installerIcon: build-resources/icon.ico
+  uninstallerIcon: build-resources/icon.ico
+  installerSidebar: build-resources/installer-sidebar.bmp  # 164×314 BMP (optional)
+
+# ── macOS build (future) ──────────────────────────────────────────────────────
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  category: public.app-category.sports
+  icon: build-resources/icon.icns
+
+# ── Linux build (future) ──────────────────────────────────────────────────────
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Sports
+  icon: build-resources/icon.png
+
+# ── Auto-update (configure your own server) ───────────────────────────────────
+# publish:
+#   provider: generic
+#   url: https://updates.swimmanagerpro.com
