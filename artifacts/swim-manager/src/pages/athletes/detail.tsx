@@ -50,12 +50,16 @@ export default function AthleteDetail() {
     const results: { event: string; time: number }[] = [];
     for (const entry of entries) {
       const evt = store.events.find((ev) => ev.id === entry.eventId);
-      const result = store.results.find((r) => r.entryId === entry.id);
-      if (result?.finishTime && evt && !result.dq && !result.ns && !result.dnf) {
-        results.push({
-          event: `${evt.distance} ${evt.stroke}`,
-          time: result.finishTime,
-        });
+      if (!evt) continue;
+      // Consider every round's swim (prelim + final); the best-time map below
+      // keeps the fastest valid time per event.
+      for (const result of store.results.filter((r) => r.entryId === entry.id)) {
+        if (result.finishTime && !result.dq && !result.ns && !result.dnf) {
+          results.push({
+            event: `${evt.distance} ${evt.stroke}`,
+            time: result.finishTime,
+          });
+        }
       }
     }
     const bestMap = new Map<string, number>();

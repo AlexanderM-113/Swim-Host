@@ -8,6 +8,7 @@ import {
   readStore,
   writeStore,
   nextId,
+  effectiveResult,
   getListRelayTeamsQueryKey,
 } from "./local-store";
 
@@ -59,7 +60,7 @@ export function athleteBestTime(
     if (!event || event.isRelay) continue;
     if (event.distance !== legDistance) continue;
     if (!strokeMatches(event.stroke, legStroke)) continue;
-    const result = store.results.find((r) => r.entryId === entry.id);
+    const result = effectiveResult(store.results, entry.id);
     const resultTime = result && !result.dq && !result.ns && !result.dnf ? result.finishTime ?? null : null;
     for (const t of [resultTime, entry.seedTime ?? null]) {
       if (t != null && (best == null || t < best)) best = t;

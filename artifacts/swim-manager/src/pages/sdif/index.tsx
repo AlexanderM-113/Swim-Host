@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { useListMeets, readStore, writeStore, nextId } from "@/lib/local-store";
+import { useListMeets, readStore, writeStore, nextId, effectiveResult } from "@/lib/local-store";
 import type { Meet, Team, Athlete, Event, Entry } from "@/lib/local-store";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -444,7 +444,7 @@ function ExportTab() {
           const team = athlete?.teamId ? store.teams.find((t) => t.id === athlete.teamId) : null;
           const result =
             exportType === "results" || exportType === "both"
-              ? store.results.find((r) => r.entryId === entry.id)
+              ? effectiveResult(store.results, entry.id)
               : null;
           allEntries.push({
             ...entry,

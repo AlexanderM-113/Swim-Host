@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { readStore, useListMeets, useListAthletes, useListWorkouts, useGetClub, useGetSettings } from "@/lib/local-store";
+import { readStore, useListMeets, useListAthletes, useListWorkouts, useGetClub, useGetSettings, effectiveResult } from "@/lib/local-store";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -105,7 +105,7 @@ function buildResultsSheet(meetId: number) {
       const results = store.entries
         .filter((e) => e.eventId === event.id && !e.scratched)
         .map((entry) => {
-          const result = store.results.find((r) => r.entryId === entry.id);
+          const result = effectiveResult(store.results, entry.id);
           const athlete = store.athletes.find((a) => a.id === entry.athleteId);
           const team = athlete?.teamId ? store.teams.find((t) => t.id === athlete.teamId) : null;
           return {

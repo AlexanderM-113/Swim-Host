@@ -1,4 +1,4 @@
-import { readStore } from "@/lib/local-store";
+import { readStore, effectiveResult } from "@/lib/local-store";
 import { formatTime } from "@/lib/format-time";
 
 export async function autoPushLiveResults(meetId: number): Promise<void> {
@@ -8,7 +8,7 @@ export async function autoPushLiveResults(meetId: number): Promise<void> {
     const eventEntries = store.entries.filter((e) => e.eventId === event.id && !e.scratched);
     const results = eventEntries
       .map((entry) => {
-        const result = store.results.find((r) => r.entryId === entry.id);
+        const result = effectiveResult(store.results, entry.id);
         const athlete = store.athletes.find((a) => a.id === entry.athleteId);
         const team = athlete?.teamId ? store.teams.find((t) => t.id === athlete.teamId) : null;
         return {
