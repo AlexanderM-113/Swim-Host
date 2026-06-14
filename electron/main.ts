@@ -105,9 +105,9 @@ function createActivationWindow(): void {
 
   activationWindow.setMenu(null);
 
-  const htmlPath = isDev
-    ? path.join(__dirname, "activate.html")
-    : path.join(__dirname, "../activate.html");
+  // activate.html is a standalone file at electron/activate.html (not compiled
+  // into dist/), so it's always one level up from __dirname (electron/dist/).
+  const htmlPath = path.join(__dirname, "../activate.html");
 
   activationWindow.loadFile(htmlPath).catch(console.error);
   activationWindow.on("closed", () => { activationWindow = null; });
