@@ -1,7 +1,10 @@
 {
   "name": "workspace",
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "Swim Manager Pro — swim meet & team management desktop app",
+  "author": "Sun Ray LLC",
   "license": "UNLICENSED",
+  "main": "electron/dist/main.js",
   "scripts": {
     "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",

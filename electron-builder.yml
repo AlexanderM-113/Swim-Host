@@ -7,8 +7,8 @@ directories:
   output: dist/installers
   buildResources: build-resources
 
-# ── Electron main entry (compiled from electron/main.ts) ─────────────────────
-main: electron/dist/main.js
+# The Electron main entry (compiled from electron/main.ts) is declared via the
+# root package.json "main" field — electron-builder reads it from there.
 
 # ── Files packed into the app asar ───────────────────────────────────────────
 files:
@@ -42,7 +42,7 @@ win:
 # ── NSIS installer (Windows .exe) ─────────────────────────────────────────────
 nsis:
   # Show the full EULA — user must click "I Agree" to proceed with install
-  licenseFile: electron/eula.txt
+  license: electron/eula.txt
 
   oneClick: false                 # Show step-by-step wizard
   allowToChangeInstallationDirectory: true
@@ -54,7 +54,7 @@ nsis:
   installerHeaderIcon: build-resources/icon.ico
   installerIcon: build-resources/icon.ico
   uninstallerIcon: build-resources/icon.ico
-  installerSidebar: build-resources/installer-sidebar.bmp  # 164×314 BMP (optional)
+  # installerSidebar: build-resources/installer-sidebar.bmp  # optional 164×314 BMP — add the file then uncomment
 
 # ── macOS build (future) ──────────────────────────────────────────────────────
 mac:
