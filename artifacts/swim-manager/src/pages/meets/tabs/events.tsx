@@ -1,8 +1,10 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import {
   useListEvents, useListSessions, useCreateEvent, useUpdateEvent, useDeleteEvent,
-  getListEventsQueryKey, getListSessionsQueryKey, type Event,
+  useGetMeet, getListEventsQueryKey, getListSessionsQueryKey,
+  readStore, writeStore, nextId, type Event, type Session,
 } from "@/lib/local-store";
+import { parseEv3, summarizeEv3 } from "@/lib/ev3-import";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Plus, Pencil, Trash2, ChevronUp, ChevronDown, Layers, Zap, MoreHorizontal,
-  GripVertical,
+  GripVertical, Upload, Loader2,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -438,6 +440,7 @@ function statusColor(status: string) {
 export default function MeetEvents({ meetId }: { meetId: number }) {
   const { data: events = [], isLoading } = useListEvents(meetId);
   const { data: sessions = [] } = useListSessions(meetId);
+  const { data: meet } = useGetMeet(meetId);
   const createEvent = useCreateEvent();
   const updateEvent = useUpdateEvent();
   const deleteEvent = useDeleteEvent();
@@ -448,6 +451,88 @@ export default function MeetEvents({ meetId }: { meetId: number }) {
   const [editEvent, setEditEvent] = useState<Event | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const ev3InputRef = useRef<HTMLInputElement>(null);
+
+  function addDays(iso: string | undefined, days: number): string | undefined {
+    if (!iso) return undefined;
+    const d = new Date(iso + "T00:00:00");
+    if (Number.isNaN(d.getTime())) return undefined;
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+  }
+
+  async function handleImportEv3(file: File) {
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const parsed = parseEv3(text);
+      if (parsed.events.length === 0) {
+        toast({ title: "No events found", description: "The .ev3 file contained no event records.", variant: "destructive" });
+        return;
+      }
+
+      const store = readStore();
+      const newSessions: Session[] = [];
+      // Reuse a session that already exists for this meet with the same number,
+      // otherwise create one (dated from the meet start date + day offset).
+      const sessionIdByNumber = new Map<number, number>();
+      for (const s of store.sessions.filter((s) => s.meetId === meetId)) {
+        if (s.sessionNumber != null) sessionIdByNumber.set(s.sessionNumber, s.id);
+      }
+      let sessionIdSeed = nextId([...store.sessions, ...newSessions]);
+      for (const ev of parsed.events) {
+        if (ev.sessionNumber == null || sessionIdByNumber.has(ev.sessionNumber)) continue;
+        const id = sessionIdSeed++;
+        sessionIdByNumber.set(ev.sessionNumber, id);
+        newSessions.push({
+          id,
+          meetId,
+          sessionNumber: ev.sessionNumber,
+          name: ev.day ? `Session ${ev.sessionNumber} (Day ${ev.day})` : `Session ${ev.sessionNumber}`,
+          date: ev.day ? addDays(meet?.startDate, ev.day - 1) : meet?.startDate,
+          startTime: ev.sessionStart ?? undefined,
+        });
+      }
+
+      let eventIdSeed = nextId(store.events);
+      const newEvents: Event[] = parsed.events.map((ev) => ({
+        id: eventIdSeed++,
+        meetId,
+        sessionId: ev.sessionNumber != null ? sessionIdByNumber.get(ev.sessionNumber) : undefined,
+        eventNumber: ev.eventNumber,
+        gender: ev.gender,
+        ageGroup: ev.ageGroup || undefined,
+        distance: ev.distance,
+        stroke: ev.stroke,
+        course: ev.course ?? undefined,
+        eventType: ev.eventType,
+        heatOrder: "Slow-to-Fast",
+        isRelay: ev.isRelay,
+        status: "pending",
+        createdAt: new Date().toISOString(),
+      }));
+
+      writeStore({
+        ...store,
+        sessions: [...store.sessions, ...newSessions],
+        events: [...store.events, ...newEvents],
+      });
+      queryClient.invalidateQueries({ queryKey: getListEventsQueryKey(meetId) });
+      queryClient.invalidateQueries({ queryKey: getListSessionsQueryKey(meetId) });
+
+      const sum = summarizeEv3(parsed);
+      toast({
+        title: `Imported ${newEvents.length} events`,
+        description: `${sum.individualEvents} individual, ${sum.relayEvents} relay · ${newSessions.length} new session(s)${parsed.warnings.length ? ` · ${parsed.warnings.length} warning(s)` : ""}`,
+      });
+    } catch (err) {
+      toast({ title: "Import failed", description: err instanceof Error ? err.message : "Could not parse the .ev3 file.", variant: "destructive" });
+    } finally {
+      setImporting(false);
+      if (ev3InputRef.current) ev3InputRef.current.value = "";
+    }
+  }
 
   const sorted = useMemo(() => [...events].sort((a, b) => a.eventNumber - b.eventNumber), [events]);
 
@@ -549,6 +634,20 @@ export default function MeetEvents({ meetId }: { meetId: number }) {
           <p className="text-sm text-muted-foreground mt-0.5">{sorted.length} event{sorted.length !== 1 ? "s" : ""}</p>
         </div>
         <div className="flex items-center gap-2">
+          <input
+            ref={ev3InputRef}
+            type="file"
+            accept=".ev3,.txt"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleImportEv3(file);
+            }}
+          />
+          <Button variant="outline" size="sm" disabled={importing} onClick={() => ev3InputRef.current?.click()}>
+            {importing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+            Import .ev3
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setBulkOpen(true)}>
             <Zap className="h-4 w-4 mr-2" />
             Quick Template
