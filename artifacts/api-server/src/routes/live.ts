@@ -31,7 +31,7 @@ router.get("/live/:meetId", (req, res) => {
   if (!data) {
     return res.json({ meetId, updatedAt: null, events: [], scratchRequests: [] });
   }
-  res.json(data);
+  return res.json(data);
 });
 
 router.post("/live/:meetId", (req, res) => {

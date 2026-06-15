@@ -77,15 +77,17 @@ export default function AthleteDetail() {
     for (const entry of store.entries) {
       if (!matchingIds.has(entry.athleteId)) continue;
       const evt = store.events.find((ev) => ev.id === entry.eventId);
-      const result = store.results.find((r) => r.entryId === entry.id);
-      if (result?.finishTime && evt && !result.dq && !result.ns && !result.dnf) {
-        const meetName =
-          store.meets.find((m) => m.id === entry.meetId)?.name ?? "Meet";
-        allRaw.push({
-          event: `${evt.distance} ${evt.stroke}`,
-          time: result.finishTime,
-          source: meetName,
-        });
+      if (!evt) continue;
+      const meetName =
+        store.meets.find((m) => m.id === entry.meetId)?.name ?? "Meet";
+      for (const result of store.results.filter((r) => r.entryId === entry.id)) {
+        if (result.finishTime && !result.dq && !result.ns && !result.dnf) {
+          allRaw.push({
+            event: `${evt.distance} ${evt.stroke}`,
+            time: result.finishTime,
+            source: meetName,
+          });
+        }
       }
     }
 
