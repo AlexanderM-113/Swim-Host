@@ -35,7 +35,7 @@ const STATUS_STYLE: Record<BridgeStatus, string> = {
 /** Render a raw response string with control characters made visible. */
 function visualize(s: string): string {
   return s
-    .replace(/\x0d/g, "␊")
+    .replace(/\x0d/g, "␍")
     .replace(/\x02/g, "␂")
     .replace(/\x04/g, "␃");
 }
