@@ -9,6 +9,12 @@ export function formatTime(seconds: number | null | undefined): string {
   return `${minutes}:${paddedSeconds}`;
 }
 
+/** Distance unit for a course code: "y" for short-course yards, else "m". */
+export function courseUnit(course?: string | null): string {
+  if (!course) return "m";
+  return course.toUpperCase().includes("Y") ? "y" : "m";
+}
+
 export function parseTime(timeStr: string): number | null {
   if (!timeStr || timeStr.trim() === "") return null;
   const parts = timeStr.split(":");
