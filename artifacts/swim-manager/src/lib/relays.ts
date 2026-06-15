@@ -59,8 +59,12 @@ export function athleteBestTime(
     if (!event || event.isRelay) continue;
     if (event.distance !== legDistance) continue;
     if (!strokeMatches(event.stroke, legStroke)) continue;
-    const result = store.results.find((r) => r.entryId === entry.id);
-    const resultTime = result && !result.dq && !result.ns && !result.dnf ? result.finishTime ?? null : null;
+    const resultTime = store.results
+      .filter((r) => r.entryId === entry.id && !r.dq && !r.ns && !r.dnf && r.finishTime != null)
+      .reduce<number | null>((b, r) => {
+        const t = r.finishTime as number;
+        return b == null || t < b ? t : b;
+      }, null);
     for (const t of [resultTime, entry.seedTime ?? null]) {
       if (t != null && (best == null || t < best)) best = t;
     }
