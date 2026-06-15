@@ -8,7 +8,7 @@ import {
   Play, Pause, Settings, X, Monitor, Radio, Cable
 } from "lucide-react";
 import { useListMeets, useListEvents, useListHeats } from "@/lib/local-store";
-import { formatTime } from "@/lib/format-time";
+import { formatTime, courseUnit } from "@/lib/format-time";
 import { subscribeToRun, getActiveRun, subscribeToSignals } from "@/lib/live-broadcast";
 import HytekInterfacePanel from "./hytek-interface";
 
@@ -279,7 +279,7 @@ export default function Scoreboard() {
     if (a.place && b.place) return a.place - b.place;
     if (a.place) return -1;
     if (b.place) return 1;
-    return (a.lane ?? 0) - (b.lane ?? 0);
+    return (a.laneNumber ?? 0) - (b.laneNumber ?? 0);
   });
   const hasResults = lanes.some((l: any) => l.finishTime != null);
 
@@ -318,7 +318,7 @@ export default function Scoreboard() {
                 <span>
                   {currentEvent.gender === "M" ? "Men's" : currentEvent.gender === "F" ? "Women's" : "Mixed"}{" "}
                   {(currentEvent.ageGroup && currentEvent.ageGroup !== "Open") ? currentEvent.ageGroup + " " : ""}
-                  {currentEvent.distance}m {currentEvent.stroke}
+                  {currentEvent.distance}{courseUnit(currentEvent.course)} {currentEvent.stroke}
                 </span>
               </div>
               <div className="text-xl text-slate-400 mt-0.5 flex items-center justify-center gap-3">
@@ -548,7 +548,7 @@ export default function Scoreboard() {
           meetId={selectedMeet ? parseInt(selectedMeet) : null}
           eventNumber={currentEvent?.eventNumber ?? null}
           heatNumber={currentHeatData?.heatNumber ?? null}
-          round={currentEvent?.eventType === "prelim" ? "P" : "F"}
+          round={(currentEvent?.eventType ?? "").toLowerCase().includes("prelim") ? "P" : "F"}
           onClose={() => setShowInterface(false)}
         />
       )}
@@ -620,12 +620,12 @@ export default function Scoreboard() {
 
             return (
               <div
-                key={lane.lane}
+                key={lane.laneNumber}
                 className={`grid grid-cols-12 items-center rounded-xl px-4 ${isFullscreen ? "py-4" : "py-2"} ${rowBg} transition-all`}
               >
                 {/* Lane */}
                 <div className={`col-span-1 font-mono font-black ${isFullscreen ? "text-4xl text-cyan-500" : "text-xl text-primary"}`}>
-                  {lane.lane}
+                  {lane.laneNumber}
                 </div>
 
                 {/* Athlete */}

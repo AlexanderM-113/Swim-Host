@@ -411,7 +411,11 @@ export class ScoreboardSerialBridge {
       else if (this.buffer.length > 0) {
         this.buffer.push(b);
         if (b === ETX) {
-          this.handleFrame(this.buffer.slice());
+          this.handleFrame(this.buffer.slice()).catch((err) => {
+            if (this.running) {
+              this.log("info", `Write error: ${err instanceof Error ? err.message : String(err)}`);
+            }
+          });
           this.buffer = [];
         } else if (this.buffer.length > 16) {
           // Runaway frame without ETX — resync.

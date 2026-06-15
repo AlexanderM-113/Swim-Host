@@ -69,6 +69,9 @@ export default function HytekInterfacePanel({
   }, []);
 
   const connect = async () => {
+    // Tear down any prior bridge (e.g. after a read error left the port open)
+    // so we never leak the COM port and can reopen the same one.
+    await bridgeRef.current?.disconnect();
     const bridge = new ScoreboardSerialBridge({
       getMeetId: () => meetIdRef.current,
       onStatus: (s, detail) => { setStatus(s); setStatusDetail(detail ?? ""); },
