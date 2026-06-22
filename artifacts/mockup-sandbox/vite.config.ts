@@ -12,7 +12,7 @@ const rawPort = process.env.PORT;
 const parsedPort = rawPort ? Number(rawPort) : NaN;
 const port =
   !Number.isNaN(parsedPort) && parsedPort > 0 ? parsedPort : DEFAULT_PORT;
-if (rawPort && port === DEFAULT_PORT) {
+if (rawPort && (Number.isNaN(parsedPort) || parsedPort <= 0)) {
   console.warn(`[vite] Invalid PORT "${rawPort}"; falling back to ${DEFAULT_PORT}.`);
 }
 
