@@ -19,6 +19,11 @@
     "gen-license": "npx tsx scripts/gen-license-key.ts"
   },
   "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
   "devDependencies": {
     "electron": "^39.8.5",
     "electron-builder": "^25.1.8",
