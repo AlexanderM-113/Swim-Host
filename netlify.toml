@@ -1,0 +1,6 @@
+# This is a desktop (Electron) application, not a hosted web site. There is no
+# Netlify deployment to build. This config makes the connected Netlify site a
+# no-op so the deploy preview succeeds instead of failing on a missing build.
+[build]
+  command = "mkdir -p netlify-public && printf '%s\\n' '<!doctype html><title>Swim Manager Pro</title><h1>Swim Manager Pro</h1><p>This project ships as a desktop application. There is no hosted site.</p>' > netlify-public/index.html"
+  publish = "netlify-public"
